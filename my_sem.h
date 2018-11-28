@@ -5,8 +5,6 @@
 #include <sys/sem.h>
 #include <sys/types.h>
 
-#define TOK "my_sem.h"
-
 union semun 
 {
 	int val;

@@ -9,19 +9,18 @@ int main(int argc, char **argv)
 	/* keys variables used to create ids of veriables above */
 	key_t qkey, skey, mkey;
 
+	/* obtaining keys */
 	if((qkey = ftok("my_msq.h", '1')) == -1) 
 	{  
 		perror("msq ftok");
 	        exit(1);
 	};
 
-	/* obtaining keys */
 	if((skey = ftok("my_sem.h", '2')) == -1) 
 	{  
 		perror("sem ftok");
 	        exit(1);
 	};
-
 
 	if((mkey = ftok("chat.h", '3')) == -1) 
 	{  
@@ -37,11 +36,16 @@ int main(int argc, char **argv)
 	}i
 
 	/* creating semaphore */
-	if ((semid = semget(key, 1, 0)) == -1) 
+	if ((sid = semget(skey, 1, 0)) == -1) 
 	{
 		perror("semget");
 		exit(1);
 	}
 				    
+	if ((mid = semget(skey, 1, 0)) == -1) 
+	{
+		perror("semget");
+		exit(1);
+	}
 	return 0;
 }

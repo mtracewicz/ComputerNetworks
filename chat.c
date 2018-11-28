@@ -9,20 +9,26 @@ int main(int argc, char **argv)
 	/* keys variables used to create ids of veriables above */
 	key_t qkey, skey, mkey;
 
+<<<<<<< HEAD
     /* obtaining keys */
+=======
+	/* obtaining keys */
+>>>>>>> 96eab0bb9664bba47987ef1551a318331933305f
 	if((qkey = ftok("my_msq.h", '1')) == -1) 
 	{  
 		perror("msq ftok");
 	        exit(1);
 	};
 
+<<<<<<< HEAD
 	
+=======
+>>>>>>> 96eab0bb9664bba47987ef1551a318331933305f
 	if((skey = ftok("my_sem.h", '2')) == -1) 
 	{  
 		perror("sem ftok");
 	        exit(1);
 	};
-
 
 	if((mkey = ftok("chat.h", '3')) == -1) 
 	{  
@@ -38,6 +44,7 @@ int main(int argc, char **argv)
 	};
 
 	/* creating semaphore */
+<<<<<<< HEAD
 	if ((sid = semget(skey, 1 | IPC_CREAT) == -1) 
 	{
 		perror("semget");
@@ -59,4 +66,18 @@ int main(int argc, char **argv)
     }
 
     return 0;
+=======
+	if ((sid = semget(skey, 1, 0)) == -1) 
+	{
+		perror("semget");
+		exit(1);
+	}
+				    
+	if ((mid = semget(skey, 1, 0)) == -1) 
+	{
+		perror("semget");
+		exit(1);
+	}
+	return 0;
+>>>>>>> 96eab0bb9664bba47987ef1551a318331933305f
 }

@@ -44,7 +44,6 @@ int main(int argc, char **argv)
 	};
 
 	/* creating semaphore */
-<<<<<<< HEAD
 	if ((sid = semget(skey, 1 | IPC_CREAT) == -1) 
 	{
 		perror("semget");
@@ -66,18 +65,4 @@ int main(int argc, char **argv)
     }
 
     return 0;
-=======
-	if ((sid = semget(skey, 1, 0)) == -1) 
-	{
-		perror("semget");
-		exit(1);
-	}
-				    
-	if ((mid = semget(skey, 1, 0)) == -1) 
-	{
-		perror("semget");
-		exit(1);
-	}
-	return 0;
->>>>>>> 96eab0bb9664bba47987ef1551a318331933305f
 }

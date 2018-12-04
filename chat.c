@@ -9,21 +9,16 @@ int main(int argc, char **argv)
 	/* keys variables used to create ids of veriables above */
 	key_t qkey, skey, mkey;
 
-<<<<<<< HEAD
-    /* obtaining keys */
-=======
-	/* obtaining keys */
->>>>>>> 96eab0bb9664bba47987ef1551a318331933305f
+	/* creating all needed IPC devices */
+
+    	/* obtaining keys */
+	
 	if((qkey = ftok("my_msq.h", '1')) == -1) 
 	{  
 		perror("msq ftok");
 	        exit(1);
 	};
 
-<<<<<<< HEAD
-	
-=======
->>>>>>> 96eab0bb9664bba47987ef1551a318331933305f
 	if((skey = ftok("my_sem.h", '2')) == -1) 
 	{  
 		perror("sem ftok");
@@ -44,25 +39,31 @@ int main(int argc, char **argv)
 	};
 
 	/* creating semaphore */
-	if ((sid = semget(skey, 1 | IPC_CREAT) == -1) 
+	if ((sid = semget(skey, 1 |IPC_EXCL | IPC_CREAT) == -1) 
 	{
-		perror("semget");
-		exit(1);
+		if ((sid = semget(skey, 1 | IPC_CREAT) == -1) 
+		{
+			perror("semget");
+			exit(1);		
+		};
+
+		arg.val = 1;
+    		if (semctl(sid, 0, SETVAL, arg) == -1) 
+    		{
+        		perror("semctl");
+        		exit(1);
+    		}	
 	};
 
-    arg.val = 1;
-    if (semctl(sid, 0, SETVAL, arg) == -1) 
-    {
-        perror("semctl");
-        exit(1);
-    }
 
-    /* creating shared memory */
+	/* creating shared memory */
 	if ((shmid = shmget(mkey, SHM_SIZE, 0644 | IPC_CREAT)) == -1)
-    {
-        perror("shmget");
-        exit(1);
-    }
+    	{
+       	 	perror("shmget");
+        	exit(1);
+    	};
+
+	/* creating all needed IPC devices */
 
     return 0;
 }

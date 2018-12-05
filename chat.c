@@ -42,7 +42,8 @@ int main(int argc, char **argv)
 	
 	/* semaphore veriable*/
 	union semun arg;
-	
+  	struct sembuf sb;
+
 	/* veriable for forking */
 	pid_t child;
 	
@@ -92,6 +93,9 @@ int main(int argc, char **argv)
         		exit(1);
 		}	
 	}
+	sb.sem_num = 0;
+	sb.sem_op = -1;
+	sb.sem_flg = 0;
 
 	/* creating shared memory */
 	if ((mid = shmget(mkey,sizeof(int[15]), 0644 | IPC_EXCL | IPC_CREAT)) == -1)
@@ -120,6 +124,13 @@ int main(int argc, char **argv)
 	/* created all needed IPC devices
 	 * now we will register user */
 	procesid = getpid();	
+	
+
+	if (semop(sid, &sb, 1) == -1) 
+	{
+		perror("semop");
+	        exit(1);
+	}
 	for(i = 0 ; i < 15;i++)
 	{
 		if(registered[i] == 0 && c == 0)
@@ -128,6 +139,15 @@ int main(int argc, char **argv)
 			c = 1;
 		}
 	}
+
+	
+
+	sb.sem_op = 1;
+	if (semop(sid, &sb, 1) == -1) 
+	{ 
+		perror("semop");  
+       		exit(1);
+ 	}
 	if( c == 0 )
 	{
 		printf("Chat is being used by maximum users right now, please try again later\n");
@@ -168,7 +188,14 @@ int main(int argc, char **argv)
 	  	 	{	
 				if( !strcmp(buf.mtext, "/exit") )
 					exit(1);       	
-			
+				
+				sb.sem_op = -1;
+    				if (semop(sid, &sb, 1) == -1) 
+				{
+          				perror("semop");
+        				exit(1);
+    				}
+
 				for( i = 0 ; i < 15 ; i++)    
 				{
 					if( registered[i] == 0)
@@ -180,11 +207,26 @@ int main(int argc, char **argv)
 							perror("msgsnd");
 					}
 				}
+
+				sb.sem_op = 1;
+    				if (semop(sid, &sb, 1) == -1) 
+				{
+          				perror("semop");
+        				exit(1);
+    				}
+	
 	         	}	 
 		}
 	}
 
 	/* unregistering */
+	
+	sb.sem_op = -1;
+    	if (semop(sid, &sb, 1) == -1) 
+	{
+      		perror("semop");
+        	exit(1);
+   	}
 	for( i = 0 ; i < 15 ; i++)    
 	{
 		if( registered[i] == procesid)
@@ -198,6 +240,13 @@ int main(int argc, char **argv)
 		if(registered[i])
 			ctr = 1;
 	}
+
+	sb.sem_op = 1;
+   	if (semop(sid, &sb, 1) == -1) 	
+	{
+        	perror("semop");
+       		exit(1);
+    	}
 	if(ctr == 0)
 	{
 		/* deleting IPC devices */

@@ -140,7 +140,7 @@ int main(int argc, char **argv)
 	pwd = getpwuid(userid);
 	strcat(username,pwd -> pw_name);
 	strcat(username,newpid);
-	strncpy(buf.usrname, username, 25);
+	strncpy(buf.usrname, username, sizeof(username));
 
 	/* chat starts */
 	/* forking to make both reading and writin at the 'same time' posible */
@@ -191,7 +191,42 @@ int main(int argc, char **argv)
 			registered[i] = 0;
 	}
 
-	/* detaching shered memory */
-	shmdt((void *) registered);
-    	return 0;
+	/* checking if IPC devices should be deleted */
+	ctr = 0;
+	for( i = 0 ; i < 15 ; i++)    
+	{
+		if(registered[i])
+			ctr = 1;
+	}
+	if(ctr == 0)
+	{
+		/* deleting IPC devices */
+		
+		/* deleting semaphore */	
+		if (semctl(sid, 0, IPC_RMID, arg) == -1) 
+		{
+        		perror("semctl");
+        		exit(1);
+		}
+
+		/* deleting msgq */
+		if (msgctl(qid, IPC_RMID, NULL) == -1) 
+		{
+	        	perror("msgctl");
+		        exit(1);
+		}
+
+		/* deleting shered memory */
+		if (shmctl(mid, IPC_RMID, NULL) == -1)
+		{
+	        	perror("shmctl");
+		        exit(1);
+		}
+	}
+	else
+	{
+		/* detaching shered memory */
+		shmdt((void *) registered);
+	}
+	return 0;
 }

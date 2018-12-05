@@ -1,7 +1,16 @@
 #include <pwd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
+#include <sys/sem.h>
+#include <sys/shm.h>
+#include <string.h>
+#include <unistd.h>
 #include "my_msq.h"
 #include "my_sem.h"
-#include "chat.h"
 
 int main(int argc, char **argv)
 {
@@ -9,8 +18,9 @@ int main(int argc, char **argv)
 	int qid, sid, mid;
 	/* keys variables used to create ids of veriables above */
 	key_t qkey, skey, mkey;
-	/* struct for sending msg*/
-	struct my_msgbuf buf;
+	/* struct for sending and reciving msg*/
+	struct my_msgbuf buf;	
+	struct my_msgbuf bufrcv;
 	/* veriable used to register proces into chat */	
 	pid_t procesid;
 	/* array of registered users */
@@ -19,9 +29,11 @@ int main(int argc, char **argv)
 	char username[25];
 	uid_t userid;
 	struct passwd *pwd;
-	char newPID[10] = {0};
+	char newpid[5] = {0};
 	/* iterators, controlers and tmp veriables */
-	int i = 0,c = 0,ctr = 1,tmp = 0;
+	int i = 0,c = 0,tmp = 0;
+	/* semaphore veriable*/
+	union semun arg;
 
 	/* creating all needed IPC devices */
 
@@ -52,9 +64,9 @@ int main(int argc, char **argv)
 	};
 
 	/* creating semaphore */
-	if ((sid = semget(skey, 1 |IPC_EXCL | IPC_CREAT) == -1) 
+	if ((sid = semget(skey, 1 ,IPC_EXCL | IPC_CREAT) == -1)) 
 	{
-		if ((sid = semget(skey, 1 | IPC_CREAT) == -1) 
+		if ((sid = semget(skey, 1 , IPC_CREAT) == -1)) 
 		{
 			perror("semget");
 			exit(1);		
@@ -70,23 +82,23 @@ int main(int argc, char **argv)
 
 
 	/* creating shared memory */
-	if ((shmid = shmget(mkey,sizeof(int[15]), 0644 | IPC_EXCl | IPC_CREAT)) == -1)
+	if ((mid = shmget(mkey,sizeof(int[15]), 0644 | IPC_EXCL | IPC_CREAT)) == -1)
     	{ 
-		if ((shmid = shmget(mkey,sizeof(int[15]), 0644 | IPC_CREAT)) == -1)
+		if ((mid = shmget(mkey,sizeof(int[15]), 0644 | IPC_CREAT)) == -1)
 		{
 			perror("shmget");
 			exit(1);		
 		}
 	
-		registered = (int*)shmat(shmid,0,0);
+		registered = (int*)shmat(mid,0,0);
 		for(i = 0 ; i < 15;i++)
 		{
 			registered[i] = 0;
 		}
-    	};
+    	}
 	else
 	{
-		registered = (int*)shmat(shmid,0,0);
+		registered = (int*)shmat(mid,0,0);
 	}
 
 	/* created all needed IPC devices
@@ -112,27 +124,34 @@ int main(int argc, char **argv)
 	strcat(username,pwd -> pw_name);
 	strcat(username," ");
 	strcat(username,newpid);
-	buf.usrname = username;
+	strncpy(buf.usrname, username, 25);
 	/* chat starts */
-	while(ctr)
+	for(;;)
 	{
 		    
-		 if (msgrcv(msqid, (struct msgbuf *)&buf, sizeof(buf), 0, 0) == -1) 
-		 {
+		/* reciving msg */ 
+		if (msgrcv(qid, (struct msgbuf *)&bufrcv, sizeof(buf), procesid, 0) == -1) 
+		{
                		 perror("msgrcv");
            		 exit(1);
-               	 }
+               	}
         	 printf("%s: %s\n", buf.usrname, buf.mtext);	
+		 
+		 /* sending msg*/
 		 while( fgets(buf.mtext, MAXLINE, stdin) != NULL ) 
 	  	 {
 			if(buf.mtext == "/exit")
-			      ctr = 0; 	
+				exit(1);       	
 			for( i = 0 ; i < 15 ; i++)    
 			{
 				if( registered[i] == 0)
 					continue;
-				else if (msgsnd(mid,(struct msgbuf *)&buf, sizeof(buf), registered[i],0) == -1)
-					perror("msgsnd");
+				else
+				{ 
+					buf.mtype = registered[i];	
+					if (msgsnd(qid,(struct msgbuf *)&buf, sizeof(buf),0) == -1)
+						perror("msgsnd");
+				}
 			}
 	         } 
 	}	

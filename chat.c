@@ -38,7 +38,7 @@ int main(int argc, char **argv)
 	char newpid[5] = {0};
 	
 	/* iterators, controlers veriables */
-	int i = 0,c = 0;
+	int i = 0,c = 0,ctr = 0;
 	
 	/* semaphore veriable*/
 	union semun arg;
@@ -100,16 +100,23 @@ int main(int argc, char **argv)
 		{
 			perror("shmget");
 			exit(1);		
-		}
-	
-		registered = (int*)shmat(mid,0,0);	
+		}	
+    	}
+	else
+	{
+		ctr = 1;	
+	}
+
+	registered = (int*)shmat(mid,0,0);
+	/* puts zero an  array if it was just created */
+	if(ctr == 1)
+	{
 		for(i = 0 ; i < 15;i++)
 		{
 			registered[i] = 0;
 		}
-    	}
-	registered = (int*)shmat(mid,0,0);
-	
+	}
+	printf("%d\n\n",ctr);
 	/* created all needed IPC devices
 	 * now we will register user */
 	procesid = getpid();	
@@ -125,6 +132,10 @@ int main(int argc, char **argv)
 	{
 		printf("Chat is being used by maximum users right now, please try again later\n");
 		exit(0);
+	}
+	for( i = 0 ; i < 15 ; i++)    
+	{
+		printf("%d\n",registered[i]);
 	}
 
 	/* creating username */

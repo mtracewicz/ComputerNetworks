@@ -38,8 +38,8 @@ int main(int argc, char **argv)
 	struct passwd *pwd;
 	char newpid[5] = {0};
 	
-	/* iterators, controlers and tmp veriables */
-	int i = 0,c = 0,tmp = 0;
+	/* iterators, controlers veriables */
+	int i = 0,c = 0;
 	
 	/* semaphore veriable*/
 	union semun arg;
@@ -182,7 +182,7 @@ int main(int argc, char **argv)
 	for( i = 0 ; i < 15 ; i++)    
 	{
 		if( registered[i] == procesid)
-			registered[i] == 0;
+			registered[i] = 0;
 	}
 
 	/* detaching shered memory */

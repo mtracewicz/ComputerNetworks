@@ -65,9 +65,9 @@ int main(int argc, char **argv)
 	};
 
 	/* creating semaphore */
-	if ((sid = semget(skey, 1 ,IPC_EXCL | IPC_CREAT) == -1)) 
+	if ((sid = semget(skey, 1 ,I0666 |PC_EXCL | IPC_CREAT) == -1)) 
 	{
-		if ((sid = semget(skey, 1 , IPC_CREAT) == -1)) 
+		if ((sid = semget(skey, 1 , 0666 |IPC_CREAT) == -1)) 
 		{
 			perror("semget");
 			exit(1);		

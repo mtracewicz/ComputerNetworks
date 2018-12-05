@@ -15,7 +15,6 @@
 int main(int argc, char **argv)
 {
 
-	printf("ELO\n");
 	/* id veriables for message queue, semaphore, shared memory */
 	int qid, sid, mid;
 
@@ -135,13 +134,13 @@ int main(int argc, char **argv)
 	strcat(username,pwd -> pw_name);
 	strcat(username,newpid);
 	strncpy(buf.usrname, username, 25);
-	
+
 	/* chat starts */
 	/* forking to make both reading and writin at the 'same time' posible */
-	if( ( child = fork() < 0 ) )
+	if( ( child = fork() ) < 0 ) 
 		perror("Fork:\n");
 	else if ( child == 0 )
-	{	
+	{
 		 for(;;)
 		 {
 			/* reciving msg */ 
@@ -154,7 +153,7 @@ int main(int argc, char **argv)
 		 }
 	}
 	else
-	{
+	{	
 		for(;;)
 		{
 		 	/* sending msg*/
@@ -162,7 +161,7 @@ int main(int argc, char **argv)
 	  	 	{	
 				if( !strcmp(buf.mtext, "/exit") )
 					exit(1);       	
-				printf("%s",buf.mtext);
+			
 				for( i = 0 ; i < 15 ; i++)    
 				{
 					if( registered[i] == 0)

@@ -78,16 +78,14 @@ int main(int argc, char **argv)
 	};
 
 	/* creating semaphore */
-	if ((sid = semget(skey, 1 ,0666 | IPC_EXCL | IPC_CREAT) == -1)) 
+	if ((sid = semget(skey, 1 ,0666 | IPC_EXCL | IPC_CREAT)) == -1) 
 	{
-		if ((sid = semget(skey, 1 , 0666 |IPC_CREAT) == -1)) 
+		if ((sid = semget(skey, 1 , 0666 |IPC_CREAT)) == -1) 
 		{
 			perror("semget");
 			exit(1);		
 		}
-	}
-	else
-	{
+
 		arg.val = 1;
     		if (semctl(sid, 0, SETVAL, arg) == -1) 
     		{
@@ -95,6 +93,7 @@ int main(int argc, char **argv)
         		exit(1);
 		}	
 	}
+
 	/* creating shared memory */
 	if ((mid = shmget(mkey,sizeof(int[15]), 0644 | IPC_EXCL | IPC_CREAT)) == -1)
     	{ 
@@ -104,16 +103,13 @@ int main(int argc, char **argv)
 			exit(1);		
 		}
 	
-		registered = (int*)shmat(mid,0,0);
-
-    	}
-	else
-	{	
+		registered = (int*)shmat(mid,0,0);	
 		for(i = 0 ; i < 15;i++)
 		{
 			registered[i] = 0;
 		}
-	}
+    	}
+	registered = (int*)shmat(mid,0,0);
 	
 	/* created all needed IPC devices
 	 * now we will register user */

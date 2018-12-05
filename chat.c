@@ -1,16 +1,16 @@
 #include <pwd.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <errno.h>
-#include <sys/types.h>
+#include "my_msq.h"
+#include "my_sem.h"
+#include <unistd.h>
+#include <string.h>
+#include <stdlib.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
 #include <sys/sem.h>
 #include <sys/shm.h>
-#include <string.h>
-#include <unistd.h>
-#include "my_msq.h"
-#include "my_sem.h"
+#include <sys/types.h>
 
 int main(int argc, char **argv)
 {
@@ -34,7 +34,8 @@ int main(int argc, char **argv)
 	int i = 0,c = 0,tmp = 0;
 	/* semaphore veriable*/
 	union semun arg;
-
+	/* veriable for forking */
+	pid_t child;
 	/* creating all needed IPC devices */
 
     	/* obtaining keys */
@@ -50,7 +51,7 @@ int main(int argc, char **argv)
 	        exit(1);
 	};
 
-	if((mkey = ftok("chat.h", '3')) == -1) 
+	if((mkey = ftok("chat.c", '3')) == -1) 
 	{  
 		perror("mem ftok");
 	        exit(1);
@@ -125,36 +126,48 @@ int main(int argc, char **argv)
 	strcat(username," ");
 	strcat(username,newpid);
 	strncpy(buf.usrname, username, 25);
-	/* chat starts */
-	for(;;)
+	
+	/* forking to make both reading and writin at the 'same time' posible */
+	if( ( child = fork() < 0 ) )
+		perror("Blad:\n");
+	else if ( child == 0 )
 	{
-		    
-		/* reciving msg */ 
-		if (msgrcv(qid, (struct msgbuf *)&bufrcv, sizeof(buf), procesid, 0) == -1) 
-		{
-               		 perror("msgrcv");
-           		 exit(1);
-               	}
-        	 printf("%s: %s\n", buf.usrname, buf.mtext);	
-		 
-		 /* sending msg*/
-		 while( fgets(buf.mtext, MAXLINE, stdin) != NULL ) 
-	  	 {
-			if(buf.mtext == "/exit")
-				exit(1);       	
-			for( i = 0 ; i < 15 ; i++)    
-			{
-				if( registered[i] == 0)
-					continue;
-				else
-				{ 
-					buf.mtype = registered[i];	
-					if (msgsnd(qid,(struct msgbuf *)&buf, sizeof(buf),0) == -1)
-						perror("msgsnd");
+		 for(;;)
+		 {
+			 /* reciving msg */ 
+		 	if (msgrcv(qid, (struct msgbuf *)&bufrcv, sizeof(buf), procesid, 0) == -1) 
+		 	{
+               			 perror("msgrcv");
+           		 	exit(1);
+               	 	}
+        	 	printf("%s: %s\n", buf.usrname, buf.mtext);	
+		 }
+	}
+	else
+	{
+		for(;;)
+		{	 
+		 	/* sending msg*/
+		 	while( fgets(buf.mtext, MAXLINE, stdin) != NULL ) 
+	  	 	{	
+				if(buf.mtext == "/exit")
+					exit(1);       	
+				for( i = 0 ; i < 15 ; i++)    
+				{
+					if( registered[i] == 0)
+						continue;
+					else
+					{	 
+						buf.mtype = registered[i];	
+						if (msgsnd(qid,(struct msgbuf *)&buf, sizeof(buf),0) == -1)
+							perror("msgsnd");
+					}
 				}
-			}
-	         } 
-	}	
+	         	}	 
+		}
+	}
+	/* chat starts */
+
 	/* unregistering */
 	for( i = 0 ; i < 15 ; i++)    
 	{

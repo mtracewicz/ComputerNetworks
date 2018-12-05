@@ -14,6 +14,8 @@
 
 int main(int argc, char **argv)
 {
+
+	printf("ELO\n");
 	/* id veriables for message queue, semaphore, shared memory */
 	int qid, sid, mid;
 
@@ -45,6 +47,8 @@ int main(int argc, char **argv)
 	/* veriable for forking */
 	pid_t child;
 	
+	
+
 	/* creating all needed IPC devices */
 
     	/* obtaining keys */
@@ -110,7 +114,7 @@ int main(int argc, char **argv)
 			registered[i] = 0;
 		}
 	}
-
+	
 	/* created all needed IPC devices
 	 * now we will register user */
 	procesid = getpid();	
@@ -141,7 +145,7 @@ int main(int argc, char **argv)
 	if( ( child = fork() < 0 ) )
 		perror("Fork:\n");
 	else if ( child == 0 )
-	{
+	{	
 		 for(;;)
 		 {
 			/* reciving msg */ 
@@ -150,18 +154,19 @@ int main(int argc, char **argv)
                			perror("msgrcv");
            		 	exit(1);
                	 	}
-        	 	printf("%s: %s\n", buf.usrname, buf.mtext);	
+        	 	printf("%s: %s\n", bufrcv.usrname, bufrcv.mtext);	
 		 }
 	}
 	else
 	{
 		for(;;)
-		{	 
+		{
 		 	/* sending msg*/
 		 	while( fgets(buf.mtext, MAXLINE, stdin) != NULL ) 
 	  	 	{	
-				if(buf.mtext == "/exit")
+				if( !strcmp(buf.mtext, "/exit") )
 					exit(1);       	
+				printf("%s",buf.mtext);
 				for( i = 0 ; i < 15 ; i++)    
 				{
 					if( registered[i] == 0)

@@ -158,6 +158,8 @@ int main(int argc, char **argv)
 	userid = getuid();
 	sprintf(newpid, "%d", (int)procesid);
 	pwd = getpwuid(userid);
+	for( i = 0; i < 25 ;i++)
+		buf.usrname[i] = ' ';
 	strcat(username,pwd -> pw_name);
 	strcat(username,newpid);
 	strncpy(buf.usrname, username, sizeof(username));

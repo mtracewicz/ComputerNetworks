@@ -116,7 +116,7 @@ int main(int argc, char **argv)
 			registered[i] = 0;
 		}
 	}
-	printf("%d\n\n",ctr);
+	
 	/* created all needed IPC devices
 	 * now we will register user */
 	procesid = getpid();	
@@ -132,10 +132,6 @@ int main(int argc, char **argv)
 	{
 		printf("Chat is being used by maximum users right now, please try again later\n");
 		exit(0);
-	}
-	for( i = 0 ; i < 15 ; i++)    
-	{
-		printf("%d\n",registered[i]);
 	}
 
 	/* creating username */
@@ -168,7 +164,7 @@ int main(int argc, char **argv)
 		for(;;)
 		{
 		 	/* sending msg*/
-		 	while( fgets(buf.mtext, MAXLINE, stdin) != NULL ) 
+			while( fgets(buf.mtext, MAXLINE, stdin) != NULL ) 
 	  	 	{	
 				if( !strcmp(buf.mtext, "/exit") )
 					exit(1);       	

@@ -114,7 +114,7 @@ int main(int argc, char **argv)
 	{
 
 		/* obtaining msq key */
-		if( (qkey = ftok("my_msq.h", '1') ) == -1 ) 
+		if( (qkey = ftok("/etc/passwd", '1') ) == -1 ) 
 		{  
 			perror("msq ftok");
 			exit(2);
@@ -131,7 +131,7 @@ int main(int argc, char **argv)
 	if ( flagsem == 0 )
 	{
 		/* obtaining sem key */
-		if( (skey = ftok("my_sem.h", '2') ) == -1 ) 
+		if( (skey = ftok("/etc/passwd", '2') ) == -1 ) 
 		{  
 			perror("sem ftok");
 			exit(2);
@@ -165,7 +165,7 @@ int main(int argc, char **argv)
 	if ( flagshm == 0 )
 	{
 		/* obtaining shm key */
-		if( (mkey = ftok("chat.c", '3') ) == -1 ) 
+		if( (mkey = ftok("/etc/passwd", '3') ) == -1 ) 
 		{  
 			perror("mem ftok");
 			exit(2);

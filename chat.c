@@ -406,4 +406,5 @@ void help_short()
 void hello()
 {
 	printf("Witaj w chacie stworzonym przez mtracewicz.\n");
+	printf("Chat obluguje do 15 uzytkownikow\n");
 }

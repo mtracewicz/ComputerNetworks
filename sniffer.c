@@ -7,6 +7,7 @@
 #include <sys/socket.h>
 #include <netinet/ip.h>
 #include <netinet/ip6.h>
+#include <netinet/tcp.h>
 #include <netinet/if_ether.h>
 
 void proces_ethernet(unsigned char *buf,int data_size);
@@ -101,13 +102,13 @@ void proces_ip4(unsigned char *buf,int data_size)
 			proces_tcp(buf,data_size);
 			break;
 		case 17:
-			proces_udp(buf,data_size);;
+			proces_udp(buf,data_size);
 			break;
 		case 36:
-			printf("XTP:\n");
+			proces_xtp(buf,data_size);	
 			break;
 		case 109:
-			printf("SNP:\n");
+			proces_snp(buf,data_size);
 			break;
 		default:
 			printf("Unsupported protocol\n");
@@ -120,8 +121,28 @@ void proces_ip6(unsigned char *buf,int data_size)
 	printf("\nIPv6:\n");
 	printf("Next protocol: %d\n",read_ip6 -> ip6_ctlun.ip6_un1.ip6_un1_nxt);
 	printf("Hop limit:  %d\n",read_ip6 -> ip6_ctlun.ip6_un1.ip6_un1_hlim);
-	printf("Destination address: %s",read_ip6 -> ip6_dst.s6_addr);
-	printf("Source address: %s",read_ip6 -> ip6_src.s6_addr);
+	printf("Payload lenght: %d\n",read_ip6 -> ip6_ctlun.ip6_un1. ip6_un1_plen);
+	printf("Destination address: %s\n",read_ip6 -> ip6_dst.s6_addr);
+	printf("Source address: %s\n",read_ip6 -> ip6_src.s6_addr);
+
+	switch(read_ip6 ->  ip6_ctlun.ip6_un1.ip6_un1_nxt)
+	{
+		case 6:
+			proces_tcp(buf,data_size);
+			break;
+		case 17:
+			proces_udp(buf,data_size);
+			break;
+		case 36:
+			proces_xtp(buf,data_size);	
+			break;
+		case 109:
+			proces_snp(buf,data_size);
+			break;
+		default:
+			printf("Unsupported protocol\n");
+			break;	
+	}
 }
 
 void proces_arp(unsigned char *buf,int data_size)
@@ -160,22 +181,25 @@ void proces_arp(unsigned char *buf,int data_size)
 
 void proces_tcp(unsigned char *buf,int data_size)
 {
-	printf("\n\nTCP:\n");
+	struct tcphdr *read_tcp = (tcphdr*)buf;
+	printf("\nTCP:\n");
+	printf("Destination port: %d\n",read_tcp -> th_sport);
 }
 
 void proces_udp(unsigned char *buf,int data_size)
 {
-	printf("\n\nUDP:\n");
+	struct udphdr *read_udp = (udphdr*)buf;
+	printf("\nUDP:\n");
 }
 
 void proces_xtp(unsigned char *buf,int data_size)
 {
-	printf("\n\nXTP:\n");
+	printf("\nXTP:\n");
 }
 
 void proces_snp(unsigned char *buf,int data_size)
 {
-	printf("\n\nSNP:\n");
+	printf("\nSNP:\n");
 }
 
 int main(void)

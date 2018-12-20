@@ -9,6 +9,9 @@
 #include <netinet/ip6.h>
 #include <netinet/tcp.h>
 #include <netinet/if_ether.h>
+#include <sys/ioctl.h>
+#include <net/if.h>
+#include <string.h>
 
 void proces_ethernet(unsigned char *buf,int data_size);
 
@@ -64,6 +67,8 @@ void proces_ethernet(unsigned char *buf,int data_size)
 	/* printing a ethertype */
 	printf("Ethertype: %#06hx\n",ntohs(read_ether -> ether_type));	
 	
+	buf +=  sizeof(struct ether_header);
+
 	/* procesing IPv4 or IPv6 or ARP or skips */
 	switch(ntohs(read_ether -> ether_type))
 	{
@@ -94,8 +99,11 @@ void proces_ip4(unsigned char *buf,int data_size)
 	printf("Checksum: %d\nIdentification: %d\n",read_ip -> ip_sum,read_ip -> ip_id);
 	printf("Destination address: %x\n",read_ip -> ip_dst);
 	printf("Source address: %x\n",read_ip -> ip_src);
+	printf("Total length: %d\n",read_ip ->ip_len);
 	printf("Time to live: %d\nNext protocol: %d\n",read_ip -> ip_ttl,read_ip -> ip_p);
-	
+
+	buf += 4 * read_ip -> ip_hl;	
+
 	switch(read_ip -> ip_p)
 	{
 		case 6:
@@ -124,6 +132,8 @@ void proces_ip6(unsigned char *buf,int data_size)
 	printf("Payload lenght: %d\n",read_ip6 -> ip6_ctlun.ip6_un1. ip6_un1_plen);
 	printf("Destination address: %s\n",read_ip6 -> ip6_dst.s6_addr);
 	printf("Source address: %s\n",read_ip6 -> ip6_src.s6_addr);
+
+	buf += sizeof(struct ip6_hdr);
 
 	switch(read_ip6 ->  ip6_ctlun.ip6_un1.ip6_un1_nxt)
 	{
@@ -181,14 +191,16 @@ void proces_arp(unsigned char *buf,int data_size)
 
 void proces_tcp(unsigned char *buf,int data_size)
 {
-	struct tcphdr *read_tcp = (tcphdr*)buf;
+	struct tcphdr *read_tcp = (struct tcphdr*)buf;
 	printf("\nTCP:\n");
-	printf("Destination port: %d\n",read_tcp -> th_sport);
+	printf("Destination port: %d\n",read_tcp -> th_dport);
+	printf("Source port: %d\n",read_tcp ->th_sport);
+	printf("Sequence number: %u\n",read_tcp ->th_seq);
+	printf("Acknowledgement number: %u\n",read_tcp ->th_ack);
 }
-
 void proces_udp(unsigned char *buf,int data_size)
 {
-	struct udphdr *read_udp = (udphdr*)buf;
+	struct udphdr *read_udp = (struct udphdr*)buf;
 	printf("\nUDP:\n");
 }
 
@@ -202,16 +214,33 @@ void proces_snp(unsigned char *buf,int data_size)
 	printf("\nSNP:\n");
 }
 
-int main(void)
+int main(int argc,char **argv)
 {
 
 	int sd,data_size;	
+	struct ifreq ifr ;
 	unsigned char *buf = (unsigned char *)malloc(65536);	
-	
+
+	if(argc != 2)
+	{	
+		printf("Usage: %s interface\n",argv[0]);
+		exit(0);
+	}
+
 	/* creating file descriptor from socket */	
 	if( (sd = socket( AF_PACKET, SOCK_RAW, htons(ETH_P_ALL) ) ) == -1)
 		exit_with_perror("socket\n");
-	
+
+
+	/* entering promisc mode */
+	strncpy((char *)ifr.ifr_name, argv[1], IF_NAMESIZE);
+	ifr.ifr_flags |= IFF_PROMISC;
+	if( ioctl(sd, SIOCSIFFLAGS, &ifr ) != 0 )
+	{
+		exit_with_perror("ioctl\n");
+	}
+
+
 	/* listening */
 	for(;;)
 	{	

@@ -5,6 +5,7 @@
 #include <net/if.h>
 #include <string.h>
 #include <signal.h>
+#include <sys/wait.h>
 #include <sys/types.h>
 #include <arpa/inet.h>
 #include <sys/ioctl.h>
@@ -12,7 +13,32 @@
 #include <netinet/ip.h>
 #include <netinet/ip6.h>
 #include <netinet/tcp.h>
+#include <netinet/udp.h>
 #include <netinet/if_ether.h>
+
+struct dhcpmsg
+{
+    uint8_t op;
+    uint8_t htype;
+    uint8_t hlen;
+    uint8_t hops;
+    uint32_t xid;
+    uint16_t secs;
+    uint16_t flags;
+    uint32_t ciaddr;
+    uint32_t yiaddr;
+    uint32_t siaddr;
+    uint32_t giaddr;
+    char chaddr[16];
+    char sname[64];
+    char file[128];
+    char magic[4];
+    char opt[3];
+};
+
+int  exit_with_perror(char *msg);
+
+void proces_packet(unsigned char *buf,int data_size);
 
 void proces_ethernet(unsigned char *buf,int data_size);
 
@@ -20,21 +46,36 @@ void proces_ip4(unsigned char *buf,int data_size);
 
 void proces_ip6(unsigned char *buf,int data_size);
 
+void select_next_protocol(unsigned char *buf,int data_size,int next_protocol);
+
 void proces_arp(unsigned char *buf,int data_size);
 
 void proces_tcp(unsigned char *buf,int data_size);
 
 void proces_udp(unsigned char *buf,int data_size);
 
+void tcp_udp_ports(unsigned char *buf,int data_size,unsigned short port);	
+
+void proces_echo(unsigned char *buf,int data_size);
+
+void proces_ftp(unsigned char *buf,int data_size);
+
+void proces_http(unsigned char *buf,int data_size);
+
+void proces_dhcp(unsigned char *buf,int data_size);
+
 void proces_xtp(unsigned char *buf,int data_size);
 
 void proces_snp(unsigned char *buf,int data_size);
+
+void print_data(unsigned char *buf,int data_size);
 
 int exit_with_perror(char *msg) 
 {
     perror(msg);
     exit(0);
 }
+
 
 void proces_packet(unsigned char *buf,int data_size)
 {
@@ -69,7 +110,8 @@ void proces_ethernet(unsigned char *buf,int data_size)
 	printf("Ethertype: %#06hx\n",ntohs(read_ether -> ether_type));	
 	
 	buf +=  sizeof(struct ether_header);
-
+	data_size  -=  sizeof(struct ether_header);
+	
 	/* procesing IPv4 or IPv6 or ARP or skips */
 	switch(ntohs(read_ether -> ether_type))
 	{
@@ -95,35 +137,21 @@ void proces_ethernet(unsigned char *buf,int data_size)
 void proces_ip4(unsigned char *buf,int data_size)
 {
 	struct ip *read_ip = (struct ip*)buf;
+
 	printf("\nIPv4:\n");
 	printf("Header lenght: %d\nVersion: %d\n",read_ip -> ip_hl,read_ip -> ip_v);
 	printf("Checksum: %d\nIdentification: %d\n",read_ip -> ip_sum,read_ip -> ip_id);
-	printf("Destination address: %x\n",read_ip -> ip_dst);
-	printf("Source address: %x\n",read_ip -> ip_src);
+	printf("Destination address: %s\n",inet_ntoa(read_ip->ip_dst));
+	printf("Source address: %s\n",inet_ntoa(read_ip->ip_src));
 	printf("Total length: %d\n",read_ip ->ip_len);
 	printf("Time to live: %d\nNext protocol: %d\n",read_ip -> ip_ttl,read_ip -> ip_p);
 
 	buf += 4 * read_ip -> ip_hl;	
-
-	switch(read_ip -> ip_p)
-	{
-		case 6:
-			proces_tcp(buf,data_size);
-			break;
-		case 17:
-			proces_udp(buf,data_size);
-			break;
-		case 36:
-			proces_xtp(buf,data_size);	
-			break;
-		case 109:
-			proces_snp(buf,data_size);
-			break;
-		default:
-			printf("Unsupported protocol\n");
-			break;	
-	}
+	data_size -= 4 * read_ip -> ip_hl;	
+	
+	select_next_protocol(buf,data_size,read_ip->ip_p);
 }
+
 void proces_ip6(unsigned char *buf,int data_size)
 {
 	struct ip6_hdr *read_ip6 = (struct ip6_hdr*)buf;
@@ -135,8 +163,14 @@ void proces_ip6(unsigned char *buf,int data_size)
 	printf("Source address: %s\n",read_ip6 -> ip6_src.s6_addr);
 
 	buf += sizeof(struct ip6_hdr);
+	data_size -= sizeof(struct ip6_hdr);
+	
+	select_next_protocol(buf,data_size,read_ip6 ->  ip6_ctlun.ip6_un1.ip6_un1_nxt);
+}
 
-	switch(read_ip6 ->  ip6_ctlun.ip6_un1.ip6_un1_nxt)
+void select_next_protocol(unsigned char *buf,int data_size,int next_protocol)
+{
+	switch(next_protocol)
 	{
 		case 6:
 			proces_tcp(buf,data_size);
@@ -198,12 +232,98 @@ void proces_tcp(unsigned char *buf,int data_size)
 	printf("Source port: %d\n",read_tcp ->th_sport);
 	printf("Sequence number: %u\n",read_tcp ->th_seq);
 	printf("Acknowledgement number: %u\n",read_tcp ->th_ack);
+	printf("Data offset: %d\n",read_tcp->th_off);
+	printf("Checksum: %d\n",read_tcp -> th_sum);
+
+	buf += (4 * read_tcp->th_off);
+	data_size -= (4 * read_tcp->th_off);
+	
+	printf("Destination port protocol:\n");
+	tcp_udp_ports(buf, data_size, read_tcp->th_dport);	
+	printf("Source port protocol:\n");
+	tcp_udp_ports(buf, data_size, read_tcp->th_sport);
 }
+
 void proces_udp(unsigned char *buf,int data_size)
 {
 	struct udphdr *read_udp = (struct udphdr*)buf;
 	printf("\nUDP:\n");
+	printf("Destination port: %d\n",read_udp -> uh_dport);	
+	printf("Source port: %d\n",read_udp -> uh_sport);
+	printf("UDP length: %d\n",read_udp -> uh_ulen);
+	printf("UDP checksum: %d\n",read_udp -> uh_sum);
+
+	buf += (4 * read_udp -> uh_ulen);
+	data_size -= (4 * read_udp -> uh_ulen);
 	
+	printf("Destination port protocol:\n");
+	tcp_udp_ports(buf, data_size, read_udp->uh_dport);	
+	printf("Source port protocol:\n");
+	tcp_udp_ports(buf, data_size, read_udp->uh_sport);
+}
+
+void tcp_udp_ports(unsigned char *buf,int data_size,unsigned short port)
+{
+	switch(port)
+	{
+		case 7:
+			proces_echo(buf,data_size);
+		case 20:
+			proces_ftp(buf,data_size);
+		case 80:
+			proces_http(buf,data_size);
+		case 546:
+		case 547:
+			proces_dhcp(buf,data_size);
+		default:
+			printf("Port protocol not supported\n");
+	}
+}
+
+void proces_echo(unsigned char *buf,int data_size)
+{
+	printf("\nEcho:\n");
+	print_data(buf,data_size);
+}
+
+void proces_ftp(unsigned char *buf,int data_size)
+{
+	printf("\nFTP:\n");
+	print_data(buf,data_size);
+}
+
+void proces_http(unsigned char *buf,int data_size)
+{
+	printf("\nHTTP:\n");
+	print_data(buf,data_size);
+}
+
+void proces_dhcp(unsigned char *buf,int data_size)
+{
+	struct dhcpmsg *read_dhcp = (struct dhcpmsg*)buf;
+	int i;
+
+	printf("\nDHCP msg:\n");
+	printf("OP: %d\n",read_dhcp -> op);
+	printf("Htype: %d\n",read_dhcp -> htype);
+	printf("Hlen: %d\n",read_dhcp -> hlen);
+	printf("Hops: %d\n",read_dhcp -> hops);
+	printf("XID: %d\n",read_dhcp -> xid);
+	printf("Client IP address: %d\n",read_dhcp -> ciaddr);
+	printf("Your IP address: %d\n",read_dhcp -> yiaddr);
+	printf("Server IP address: %d\n",read_dhcp -> siaddr);
+	printf("Getaway IP address: %d\n",read_dhcp -> giaddr);
+	for(i = 1; i <= 3;i++)
+	{
+		printf("Client hardware address: %#02x:%#02x:%#02x:%#02x:%#02x:%#x\n",
+				read_dhcp -> chaddr[i*0],
+				read_dhcp -> chaddr[i*1],
+				read_dhcp -> chaddr[i*2],	
+				read_dhcp -> chaddr[i*3],
+				read_dhcp -> chaddr[i*4],
+				read_dhcp -> chaddr[i*5]
+				);
+	}
 }
 
 void proces_xtp(unsigned char *buf,int data_size)
@@ -216,10 +336,21 @@ void proces_snp(unsigned char *buf,int data_size)
 	printf("\nSNP:\n");
 }
 
+void print_data(unsigned char *buf,int data_size)
+{
+	int i;
+	for(i = 0; i < data_size; i++)
+	{
+		printf("%c",*(buf+i));
+		if(i % 10 == 0)
+			printf("\n");
+	}
+}
+
 int main(int argc,char **argv)
 {
 
-	int sd,data_size,pid;	
+	int sd,data_size,pid,child_status;	
 	struct ifreq ifr ;
 	unsigned char *buf = (unsigned char *)malloc(65536);	
 
@@ -234,7 +365,7 @@ int main(int argc,char **argv)
 		exit_with_perror("socket\n");
 
 
-	/* entering promisc mode */
+	/* entering promisc mode */ 
 	strncpy((char *)ifr.ifr_name, argv[1], IF_NAMESIZE);
 	ifr.ifr_flags |= IFF_PROMISC;
 	if( ioctl(sd, SIOCSIFFLAGS, &ifr ) != 0 )
@@ -242,13 +373,7 @@ int main(int argc,char **argv)
 		exit_with_perror("ioctl\n");
 	}
 
-	if(( pid = fork()) == 0 )
-	{
-		getchar();
-		kill(9,getppid());
-		exit(0);
-	}
-	else if(pid > 0)
+	if( ( pid = fork()) == 0 )
 	{
 		/* listening */
 		for(;;)
@@ -259,16 +384,27 @@ int main(int argc,char **argv)
 			proces_packet(buf,data_size);
 		}
 	}
+	else if(pid > 0)
+	{	
+		getchar();
+		kill(pid,9);	
+		wait(&child_status);
+		
+		/* disabling promisc mode */
+		strncpy((char *)ifr.ifr_name, argv[1], IF_NAMESIZE);
+		ifr.ifr_flags &= ~IFF_PROMISC;
+		if( ioctl(sd, SIOCSIFFLAGS, &ifr ) != 0 )
+		{
+			exit_with_perror("ioctl\n");
+		}
+					
+		exit(0);
+	
+	}
+
 	else
 	{
 		exit_with_perror("Fork\n");
-	}
-	/* disabling promisc mode */
-	strncpy((char *)ifr.ifr_name, argv[1], IF_NAMESIZE);
-	ifr.ifr_flags &= ~IFF_PROMISC;
-	if( ioctl(sd, SIOCSIFFLAGS, &ifr ) != 0 )
-	{
-		exit_with_perror("ioctl\n");
 	}
 
 	close(sd);

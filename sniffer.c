@@ -2,16 +2,17 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <net/if.h>
+#include <string.h>
+#include <signal.h>
 #include <sys/types.h>
 #include <arpa/inet.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <netinet/ip.h>
 #include <netinet/ip6.h>
 #include <netinet/tcp.h>
 #include <netinet/if_ether.h>
-#include <sys/ioctl.h>
-#include <net/if.h>
-#include <string.h>
 
 void proces_ethernet(unsigned char *buf,int data_size);
 
@@ -202,6 +203,7 @@ void proces_udp(unsigned char *buf,int data_size)
 {
 	struct udphdr *read_udp = (struct udphdr*)buf;
 	printf("\nUDP:\n");
+	
 }
 
 void proces_xtp(unsigned char *buf,int data_size)
@@ -217,7 +219,7 @@ void proces_snp(unsigned char *buf,int data_size)
 int main(int argc,char **argv)
 {
 
-	int sd,data_size;	
+	int sd,data_size,pid;	
 	struct ifreq ifr ;
 	unsigned char *buf = (unsigned char *)malloc(65536);	
 
@@ -240,14 +242,33 @@ int main(int argc,char **argv)
 		exit_with_perror("ioctl\n");
 	}
 
-
-	/* listening */
-	for(;;)
-	{	
-		if( (data_size = recv(sd,buf,65536,0)) == -1 )	
-			exit_with_perror("recv\n");
+	if(( pid = fork()) == 0 )
+	{
+		getchar();
+		kill(9,getppid());
+		exit(0);
+	}
+	else if(pid > 0)
+	{
+		/* listening */
+		for(;;)
+		{	
+			if( (data_size = recv(sd,buf,65536,0)) == -1 )	
+				exit_with_perror("recv\n");
 		
-		proces_packet(buf,data_size);
+			proces_packet(buf,data_size);
+		}
+	}
+	else
+	{
+		exit_with_perror("Fork\n");
+	}
+	/* disabling promisc mode */
+	strncpy((char *)ifr.ifr_name, argv[1], IF_NAMESIZE);
+	ifr.ifr_flags &= ~IFF_PROMISC;
+	if( ioctl(sd, SIOCSIFFLAGS, &ifr ) != 0 )
+	{
+		exit_with_perror("ioctl\n");
 	}
 
 	close(sd);

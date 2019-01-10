@@ -198,14 +198,56 @@ void write_read_data(int socketfd)
     }
 }
 
+void run_server(int socketfd)
+{
+
+    	    int pid,new_fd;
+    	    char presentation_addr[INET6_ADDRSTRLEN];
+   	    struct sockaddr_storage their_addr;
+	    socklen_t sin_size;
+	    struct sigaction sa;
+	
+    	    sa.sa_handler = sigchld_handler;
+	    sigemptyset(&sa.sa_mask);
+	    sa.sa_flags = SA_RESTART;
+
+	    if (sigaction(SIGCHLD, &sa, NULL) == -1)
+	    	exit_with_perror("sigaction");
+
+	    printf("server: waiting for connections...\n");
+
+	    while (1) 
+	    {
+		sin_size = sizeof their_addr;
+		if( (new_fd = accept(socketfd, (struct sockaddr *)&their_addr, &sin_size) ) == -1)
+			exit_with_perror("accept");
+
+		inet_ntop(their_addr.ss_family,
+		get_in_addr((struct sockaddr *)&their_addr),
+		presentation_addr, sizeof(presentation_addr));
+		printf("server: got connection from %s\n", presentation_addr);
+
+		if ((pid = fork()) == 0) 
+		{
+		    close(socketfd);
+		    write_read_data(new_fd);
+		    exit(0);
+		} 
+		else if (pid > 0) 
+		{
+		    close(new_fd);
+		}
+	       	else 
+		{
+		    exit_with_perror("fork");
+		}
+	    }
+		
+}
+
 int main(int argc, char **argv)
 {
-	int opt,socketfd,new_fd;
-    	int pid;
-    	char presentation_addr[INET6_ADDRSTRLEN];
-   	struct sockaddr_storage their_addr;
-    	socklen_t sin_size;
-    	struct sigaction sa;
+	int opt,socketfd;
 
 	zero_flags();
 	while ((opt = getopt(argc, argv, "lu46")) != -1)
@@ -237,45 +279,8 @@ int main(int argc, char **argv)
 	{
 
 	    socketfd = setup_server(argv[optind]);
-	    sa.sa_handler = sigchld_handler;
-	    sigemptyset(&sa.sa_mask);
-	    sa.sa_flags = SA_RESTART;
-
-	    if (sigaction(SIGCHLD, &sa, NULL) == -1) {
-		perror("sigaction");
-		exit(1);
-	    }
-
-	    printf("server: waiting for connections...\n");
-
-	    while (1) {
-		sin_size = sizeof their_addr;
-		new_fd = accept(socketfd, (struct sockaddr *)&their_addr, &sin_size);
-		if (new_fd == -1) {
-		    perror("accept");
-		    continue;
-		}
-
-		inet_ntop(their_addr.ss_family,
-			  get_in_addr((struct sockaddr *)&their_addr),
-			  presentation_addr, sizeof(presentation_addr));
-		printf("server: got connection from %s\n", presentation_addr);
-
-		if ((pid = fork()) == 0) {
-		    close(socketfd);
-
-		    write_read_data(new_fd);
-
-		    exit(0);
-		} else if (pid > 0) {
-		    close(new_fd);
-		} else {
-		    perror("fork");
-		    exit(1);
-		}
-	    }
-		
-		}
+	    run_server(socketfd);
+	}
 	else	
 	{
 		socketfd = connect_to_server(argv[optind],argv[optind + 1]);

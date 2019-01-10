@@ -13,6 +13,7 @@
 #include <unistd.h>
 
 #define BACKLOG 10
+#define MAXDATASIZE 512
 #define MAXLINE 1024
 
 typedef struct sockaddr sockaddr;
@@ -20,8 +21,11 @@ int flag_server,flag_udp,flag_ip4,flag_ip6;
 
 void zero_flags();
 void exit_with_perror(char *msg);
-int  connect_to_server(char *address,char *port);
+void sigchld_handler(int s); 
+void *get_in_addr(sockaddr *sa); 
+int connect_to_server(char *address,char *port); 
 void send_data(int socketfd);
+int setup_server(char *port); 
 
 void zero_flags()
 {
@@ -37,63 +41,9 @@ void exit_with_perror(char *msg)
 	exit(0);
 }
 
-int setup_server(char *port) {
-    int sockfd, sockopt, rv, yes;
-    struct addrinfo hints, *servinfo, *p;
-
-    memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = AI_PASSIVE;
-
-    if ((rv = getaddrinfo(NULL, port, &hints, &servinfo)) != 0) {
-        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
-        return 1;
-    }
-
-    for (p = servinfo; p != NULL; p = p->ai_next) {
-        sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
-        if (sockfd == -1)
-            exit_with_perror("socket");
-
-        sockopt =
-            setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
-        if (sockopt == -1)
-            exit_with_perror("setsockopt");
-
-        if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
-            close(sockfd);
-            perror("server: bind");
-            continue;
-        }
-
-        break;
-    }
-
-    if (p == NULL)
-        exit_with_perror("server: failed to bind");
-
-    freeaddrinfo(servinfo);
-
-    if (listen(sockfd, BACKLOG) == -1)
-        exit_with_perror("listen");
-
-    return sockfd;
-}
-
-void listen_on_port(int socketfd)
+void sigchld_handler(int s) 
 {
-    int n;
-    char data[1024];
-    
-    for(;;)
-    {
-	    if ((n = recv(socketfd, &data, sizeof(data), 0)) == -1)
-       		 perror("recv");
-
-   	    if (write(1, data, n) == -1)
-       		 perror("write");
-    }	  
+    while (waitpid(-1, NULL, WNOHANG) > 0);
 }
 
 void *get_in_addr(sockaddr *sa) 
@@ -103,16 +53,29 @@ void *get_in_addr(sockaddr *sa)
     return &(((struct sockaddr_in6 *)sa)->sin6_addr);
 }
 
-int connect_to_server(char *address,char *port) {
+int connect_to_server(char *address,char *port) 
+{
     int sockfd;    // deskryptor socket
     int gai_error; // kod bledu dla gai
     char server_ip[INET6_ADDRSTRLEN];
     void *inaddr;
     struct addrinfo hints, *servinfo, *p;
 
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
+    memset(&hints, 0, sizeof hints);
+    
+    if(flag_ip4)
+	hints.ai_family = AF_INET;
+    else if(flag_ip6)
+	hints.ai_family = AF_INET6;
+    else
+    	hints.ai_family = AF_UNSPEC;
+    
+    if(flag_udp)
+	hints.ai_socktype = SOCK_DGRAM;
+    else 
+    	hints.ai_socktype = SOCK_STREAM;
+    
+    hints.ai_flags = AI_PASSIVE;
 
     if ((gai_error = getaddrinfo(address, port, &hints, &servinfo)) != 0) {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(gai_error));
@@ -154,17 +117,95 @@ int connect_to_server(char *address,char *port) {
 
 void send_data(int socketfd)
 {
-	char *data;
-	while(fgets(data, MAXLINE, stdin))
+	char data[MAXLINE];
+
+	for(;;)
 	{
-		if (write(socketfd, data, strlen(data)) == -1)
-        	exit_with_perror("Write error");
+		if( fgets(data,MAXLINE,stdin) != NULL)
+		{
+			write(socketfd,data,strlen(data));
+		}
 	}
+}
+
+int setup_server(char *port) 
+{
+    int sockfd, sockopt, rv, yes;
+    struct addrinfo hints, *servinfo, *p;
+
+    memset(&hints, 0, sizeof hints);
+    
+    if(flag_ip4)
+	hints.ai_family = AF_INET;
+    else if(flag_ip6)
+	hints.ai_family = AF_INET6;
+    else
+    	hints.ai_family = AF_UNSPEC;
+    
+    if(flag_udp)
+	hints.ai_socktype = SOCK_DGRAM;
+    else 
+    	hints.ai_socktype = SOCK_STREAM;
+    
+    hints.ai_flags = AI_PASSIVE;
+
+    if ((rv = getaddrinfo(NULL, port, &hints, &servinfo)) != 0) {
+        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+        return 1;
+    }
+
+    for (p = servinfo; p != NULL; p = p->ai_next) {
+        sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+        if (sockfd == -1)
+            exit_with_perror("socket");
+
+        sockopt =
+            setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
+        if (sockopt == -1)
+            exit_with_perror("setsockopt");
+
+        if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
+            close(sockfd);
+            perror("server: bind");
+            continue;
+        }
+
+        break;
+    }
+
+    if (p == NULL)
+        exit_with_perror("server: failed to bind");
+
+    freeaddrinfo(servinfo);
+
+    if (listen(sockfd, BACKLOG) == -1)
+        exit_with_perror("listen");
+
+    return sockfd;
+}
+
+void write_read_data(int socketfd)
+{
+    int n;
+    char data[1024];
+    for(;;)
+    {
+   	 if ((n = recv(socketfd, data, sizeof(data), 0)) == -1)
+       		 perror("recv");
+
+   	 if (write(1, data, n) == -1)
+        	perror("write");
+    }
 }
 
 int main(int argc, char **argv)
 {
-	int opt,socketfd;
+	int opt,socketfd,new_fd;
+    	int pid;
+    	char presentation_addr[INET6_ADDRSTRLEN];
+   	struct sockaddr_storage their_addr;
+    	socklen_t sin_size;
+    	struct sigaction sa;
 
 	zero_flags();
 	while ((opt = getopt(argc, argv, "lu46")) != -1)
@@ -191,15 +232,53 @@ int main(int argc, char **argv)
 				}
                }
 	}
+
 	if(flag_server)
 	{
-		socketfd = setup_server(argv[1]);
-		listen_on_port(socketfd);
-		close(socketfd);
-	}
+
+	    socketfd = setup_server(argv[optind]);
+	    sa.sa_handler = sigchld_handler;
+	    sigemptyset(&sa.sa_mask);
+	    sa.sa_flags = SA_RESTART;
+
+	    if (sigaction(SIGCHLD, &sa, NULL) == -1) {
+		perror("sigaction");
+		exit(1);
+	    }
+
+	    printf("server: waiting for connections...\n");
+
+	    while (1) {
+		sin_size = sizeof their_addr;
+		new_fd = accept(socketfd, (struct sockaddr *)&their_addr, &sin_size);
+		if (new_fd == -1) {
+		    perror("accept");
+		    continue;
+		}
+
+		inet_ntop(their_addr.ss_family,
+			  get_in_addr((struct sockaddr *)&their_addr),
+			  presentation_addr, sizeof(presentation_addr));
+		printf("server: got connection from %s\n", presentation_addr);
+
+		if ((pid = fork()) == 0) {
+		    close(socketfd);
+
+		    write_read_data(new_fd);
+
+		    exit(0);
+		} else if (pid > 0) {
+		    close(new_fd);
+		} else {
+		    perror("fork");
+		    exit(1);
+		}
+	    }
+		
+		}
 	else	
 	{
-		socketfd = connect_to_server(argv[1],argv[2]);
+		socketfd = connect_to_server(argv[optind],argv[optind + 1]);
 		send_data(socketfd);
 		close(socketfd);
 	}

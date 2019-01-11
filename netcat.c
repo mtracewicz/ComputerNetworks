@@ -57,6 +57,7 @@ int connect_to_server(char *address,char *port)
 {
     int sockfd;    // deskryptor socket
     int gai_error; // kod bledu dla gai
+    int flags;
     char server_ip[INET6_ADDRSTRLEN];
     void *inaddr;
     struct addrinfo hints, *servinfo, *p;
@@ -106,6 +107,9 @@ int connect_to_server(char *address,char *port)
         exit(0);
     }
 
+    flags = fcntl(sockfd,F_GETFL);
+    fcntl(sockfd,F_SETFL,flags | O_NONBLOCK);
+
     // translacja adresu z postaci sieciowej do formatu prezentacji
     inaddr = get_in_addr(p->ai_addr);
     inet_ntop(p->ai_family, inaddr, server_ip, sizeof(server_ip));
@@ -118,13 +122,23 @@ int connect_to_server(char *address,char *port)
 void send_data(int socketfd)
 {
 	char data[MAXLINE];
-
+	int numbytes;
 	for(;;)
 	{
 		if( fgets(data,MAXLINE,stdin) != NULL)
 		{
 			write(socketfd,data,strlen(data));
 		}
+
+    		while ((numbytes = read(socketfd, data, MAXLINE)) > 0)
+        		write(1, data, numbytes);
+
+   		if (numbytes == -1 && errno == 11)
+		{
+			continue;
+		}
+		else if( numbytes < 0)
+			exit_with_perror("read");
 	}
 }
 
@@ -159,8 +173,7 @@ int setup_server(char *port)
         if (sockfd == -1)
             exit_with_perror("socket");
 
-        sockopt =
-            setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
+        sockopt = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
         if (sockopt == -1)
             exit_with_perror("setsockopt");
 
@@ -177,10 +190,11 @@ int setup_server(char *port)
         exit_with_perror("server: failed to bind");
 
     freeaddrinfo(servinfo);
-
-    if (listen(sockfd, BACKLOG) == -1)
-        exit_with_perror("listen");
-
+    if(!flag_udp)
+    {
+	    if (listen(sockfd, BACKLOG) == -1)
+        	exit_with_perror("listen");
+    }
     return sockfd;
 }
 
@@ -188,13 +202,30 @@ void write_read_data(int socketfd)
 {
     int n;
     char data[1024];
-    for(;;)
+    struct sockaddr udp_addr;
+    socklen_t udp_len;
+    udp_len = sizeof(udp_addr);
+    
+    if(flag_udp)
     {
-   	 if ((n = recv(socketfd, data, sizeof(data), 0)) == -1)
-       		 perror("recv");
 
-   	 if (write(1, data, n) == -1)
-        	perror("write");
+		 if ((n = recvfrom(socketfd, data, sizeof(data),0,&udp_addr,&udp_len)) == -1)
+       			 perror("recvfrom");
+		
+   		 if (write(1, data, n) == -1)
+        		perror("write");
+    }
+    else
+    {
+    	for(;;)
+    	{ 
+
+		 if ((n = recv(socketfd, data, sizeof(data), 0)) == -1)
+       			 perror("recv");
+
+   		 if (write(1, data, n) == -1)
+        		perror("write");
+   	}
     }
 }
 
@@ -202,12 +233,11 @@ void run_server(int socketfd)
 {
 
     	    int pid,new_fd;
-    	    char presentation_addr[INET6_ADDRSTRLEN];
-   	    struct sockaddr_storage their_addr;
 	    socklen_t sin_size;
 	    struct sigaction sa;
-	
-    	    sa.sa_handler = sigchld_handler;
+	    struct sockaddr_storage their_addr;
+    	  
+	    sa.sa_handler = sigchld_handler;
 	    sigemptyset(&sa.sa_mask);
 	    sa.sa_flags = SA_RESTART;
 
@@ -218,28 +248,30 @@ void run_server(int socketfd)
 
 	    while (1) 
 	    {
-		sin_size = sizeof their_addr;
-		if( (new_fd = accept(socketfd, (struct sockaddr *)&their_addr, &sin_size) ) == -1)
-			exit_with_perror("accept");
-
-		inet_ntop(their_addr.ss_family,
-		get_in_addr((struct sockaddr *)&their_addr),
-		presentation_addr, sizeof(presentation_addr));
-		printf("server: got connection from %s\n", presentation_addr);
-
-		if ((pid = fork()) == 0) 
+		sin_size = sizeof (their_addr);
+		
+		if(flag_udp)
+			write_read_data(socketfd);
+		
+		else if(!flag_udp)
 		{
-		    close(socketfd);
-		    write_read_data(new_fd);
-		    exit(0);
-		} 
-		else if (pid > 0) 
-		{
-		    close(new_fd);
-		}
-	       	else 
-		{
-		    exit_with_perror("fork");
+			if( (new_fd = accept(socketfd, (struct sockaddr *)&their_addr, &sin_size) ) == -1)
+				exit_with_perror("accept");
+			
+			if ((pid = fork()) == 0) 
+			{
+		    	    close(socketfd);
+			    write_read_data(new_fd); 
+		    	    exit(0);
+			} 
+			else if (pid > 0) 
+			{
+			    close(new_fd);
+			}
+		       	else 
+			{
+			    exit_with_perror("fork");
+			}
 		}
 	    }
 		
@@ -278,8 +310,8 @@ int main(int argc, char **argv)
 	if(flag_server)
 	{
 
-	    socketfd = setup_server(argv[optind]);
-	    run_server(socketfd);
+		socketfd = setup_server(argv[optind]);
+		run_server(socketfd);
 	}
 	else	
 	{

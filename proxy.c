@@ -17,13 +17,16 @@
 
 int close_flag;
 typedef struct sockaddr sockaddr;
-void sigchld_handler(int s) {
-    while (waitpid(-1, NULL, WNOHANG) > 0)
-        ;
+
+void sigchld_handler(int s) 
+{
+    while (waitpid(-1, NULL, WNOHANG) > 0);
 }
 
-void *get_in_addr(struct sockaddr *sa) {
-    if (sa->sa_family == AF_INET) {
+void *get_in_addr(struct sockaddr *sa) 
+{
+    if (sa->sa_family == AF_INET) 
+    {
         return &(((struct sockaddr_in *)sa)->sin_addr);
     }
 
@@ -96,26 +99,28 @@ int setup_server(char *port) {
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;
 
-    if ((rv = getaddrinfo(NULL, port, &hints, &servinfo)) != 0) {
+    if ((rv = getaddrinfo(NULL, port, &hints, &servinfo)) != 0) 
+    {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
         return 1;
     }
 
-    for (p = servinfo; p != NULL; p = p->ai_next) {
+    for (p = servinfo; p != NULL; p = p->ai_next) 
+    {
         sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
         if (sockfd == -1)
             exit_with_perror("socket");
 
-        sockopt =
-            setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
+        sockopt = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
         if (sockopt == -1)
             exit_with_perror("setsockopt");
 
-        if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
+        if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1) 
+	{
             close(sockfd);
             perror("server: bind");
             continue;
-        }
+	}
 
         break;
     }
@@ -135,19 +140,29 @@ void pass_data(int fd,int hostfd)
 {
 	int n;
 	char data[1024];
-	do{
+
 	if ((n = recv(fd, data, sizeof(data), 0)) == -1)
-       		perror("recv");
+        {
+		if(errno != EAGAIN || errno != EWOULDBLOCK)
+		{
+			perror("recv");
+			close_flag = 1;
+		}
+	}
 
    	if (write(hostfd, data, n) == -1)
-        	perror("write");
-	}while(n != 0 );
-	close_flag = 1;
+	{
+        	if(errno != EAGAIN || errno != EWOULDBLOCK)
+		{
+			perror("write");
+			close_flag = 1;
+		}
+	}
 }
 
 int main(int argc, char **argv)
 {
-	int i,ret,number_of_descryptors,new_socket;
+	int i,ret,number_of_descryptors,new_socket,flags;
 	char *host,*host_port,*port;
 	int hostfd,*listenfd;
 	struct sockaddr_in address; 	
@@ -176,9 +191,7 @@ int main(int argc, char **argv)
 
 	for(;;)
 	{
-		printf("\n\nBEFORE POLL()\n");
-		for(i = 0 ; i < number_of_descryptors ; i++)
-			printf("Poll descryptors: %d\n",pfd[i].fd);
+		printf("POLL()\n");
 		if( (ret = poll(pfd,number_of_descryptors,TIMEOUT * 60 * 1000)) < 0)
 			exit_with_perror("POLL");
 		else if (ret == 0)
@@ -187,9 +200,9 @@ int main(int argc, char **argv)
 		for(i = 0 ; i < number_of_descryptors ; i++)
 		{
 
+      		
  			host = argv[ (i*3 + 2) ];
 			host_port= argv[ (i*3 + 3) ];
-      		
 			if(pfd[i].revents == 0)
         			continue;
 			if(pfd[i].revents & POLLIN)
@@ -205,16 +218,21 @@ int main(int argc, char **argv)
 						break;
 					}
 					pfd[i].fd = new_socket;
-					printf("AFTER ACCEPT: %d - %d\n",pfd[i].fd,listenfd[i]);
+					flags = fcntl(pfd[i].fd,F_GETFL);
+					fcntl(pfd[i].fd,F_SETFL,flags | O_NONBLOCK);
 				}
 				else
 				{
 					printf("HOST: %s, PORT: %s\n", host,host_port);
 					hostfd = connect_to_server(host,host_port);
+					
+					flags = fcntl(hostfd,F_GETFL);
+					fcntl(hostfd,F_SETFL,flags | O_NONBLOCK);
+					
 					pass_data(pfd[i].fd,hostfd);		
 					if(close_flag)
 					{
-						//close(pfd[i].fd);
+						close(pfd[i].fd);
 						close(hostfd);
 						pfd[i].fd = listenfd[i];
 						close_flag = 0;

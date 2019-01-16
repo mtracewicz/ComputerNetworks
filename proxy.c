@@ -147,7 +147,7 @@ void pass_data(int in_fd,int out_fd)
 		if(errno != EAGAIN || errno != EWOULDBLOCK)
 		{
 			perror("recv");
-		//	close_flag_read = 1;
+			close_flag_read = 1;
 		}
 		break;
 	}
@@ -157,7 +157,7 @@ void pass_data(int in_fd,int out_fd)
         	if(errno != EAGAIN || errno != EWOULDBLOCK)
 		{
 			perror("write");
-		//	close_flag_write = 1;
+			close_flag_write = 1;
 		}
 		break;
 	}
@@ -168,7 +168,7 @@ int main(int argc, char **argv)
 {
 	int i,ret,number_of_descryptors,new_socket,flags;
 	char *host,*host_port,*port;
-	int hostfd,*listenfd;
+	int *listenfd;
 	struct sockaddr_in address; 	
     	int addrlen = sizeof(address);
 
@@ -186,12 +186,23 @@ int main(int argc, char **argv)
 
 	for(i = 0 ; i < number_of_descryptors ; i++)
 	{
+		/*reading local port, host and host port from arguments*/
 		port = argv[3*i + 1]; 	
+ 		host = argv[ (i*3 + 2) ];
+		host_port= argv[ (i*3 + 3) ];
+		
+		/* setting up servers on port and putting it in struct pollfd */
 		if( (pfd[i].fd = setup_server(port)) < 0)
 			exit_with_perror("SOCKET");
 		pfd[i].events = POLLIN;
-
 		listenfd[i] = pfd[i].fd;
+		
+		/* connecting to host on host_port and putting it in struct pollfd, then wetting it to be nonblocking */
+		pfd[i + number_of_descryptors].fd = connect_to_server(host,host_port);
+		pfd[i + number_of_descryptors].events = POLLIN; 
+		flags = fcntl(pfd[i + number_of_descryptors].fd,F_GETFL);
+		fcntl(pfd[i + number_of_descryptors].fd,F_SETFL,flags | O_NONBLOCK);
+
 	}
 
 	for(;;)
@@ -207,6 +218,7 @@ int main(int argc, char **argv)
         			continue;
 			if(pfd[i].revents & POLLIN)
 			{
+				printf("i: %d,nod: %d\n",i,number_of_descryptors);
 				if(i < number_of_descryptors && pfd[i].fd == listenfd[i])
 				{
 					if( (new_socket = accept(pfd[i].fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) <0)
@@ -221,16 +233,6 @@ int main(int argc, char **argv)
 				}
 				else if (i < number_of_descryptors)
 				{	
-					if( !pfd[i + number_of_descryptors].fd)
-					{
- 						host = argv[ (i*3 + 2) ];
-						host_port= argv[ (i*3 + 3) ];
-						pfd[i + number_of_descryptors].fd = connect_to_server(host,host_port);
-						pfd[i + number_of_descryptors].events = POLLIN; 
-						flags = fcntl(pfd[i + number_of_descryptors].fd,F_GETFL);
-						fcntl(pfd[i + number_of_descryptors].fd,F_SETFL,flags | O_NONBLOCK);
-					}	
-
 					pass_data(pfd[i].fd,pfd[i + number_of_descryptors].fd);		
 					
 					if(close_flag_read)
@@ -243,19 +245,19 @@ int main(int argc, char **argv)
 				else if( i >= number_of_descryptors)
 				{
 					pass_data(pfd[i].fd,pfd[i - number_of_descryptors].fd);		
-					if(close_flag_read)
+					/*if(close_flag_read)
 					{
 						close(pfd[i].fd);
-					//	close(pfd[i - number_of_descryptors].fd);
-					//	pfd[i - number_of_descryptors].fd = listenfd[i];
+						close(pfd[i - number_of_descryptors].fd);
+						pfd[i - number_of_descryptors].fd = listenfd[i];
 						close_flag_read = 0;
-					}
+					}*/
 				}
 			}
 		}
 	}
 
-  	for (i = 0; i < number_of_descryptors; i++)
+  	for (i = 0; i < (2 * number_of_descryptors); i++)
  	{
     		if(pfd[i].fd >= 0)
       			close(pfd[i].fd);

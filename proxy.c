@@ -12,6 +12,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+
 #define TIMEOUT 5
 #define BACKLOG 10
 
@@ -142,25 +143,26 @@ void pass_data(int in_fd,int out_fd)
 	int n;
 	char data[1024];
 	do{
-	if ((n = recv(in_fd, data, sizeof(data), 0)) == -1)
-        {
-		if(errno != EAGAIN || errno != EWOULDBLOCK)
-		{
-			perror("recv");
-			close_flag_read = 1;
+		if ((n = recv(in_fd, data, sizeof(data), 0)) == -1)
+        	{
+			if(errno != EAGAIN || errno != EWOULDBLOCK)
+			{
+				perror("recv");
+				close_flag_read = 1;
+			}
+			break;
 		}
-		break;
-	}
 	
-   	if (write(out_fd, data, n) == -1)
-	{
-        	if(errno != EAGAIN || errno != EWOULDBLOCK)
+   		if (write(out_fd, data, n) == -1)
 		{
-			perror("write");
-			close_flag_write = 1;
+        		if(errno != EAGAIN || errno != EWOULDBLOCK)
+			{
+				perror("write");
+				close_flag_write = 1;
+			}
+			break;
 		}
-		break;
-	}
+
 	}while(1);
 }
 
@@ -207,7 +209,7 @@ int main(int argc, char **argv)
 
 	for(;;)
 	{
-		if( (ret = poll(pfd,number_of_descryptors,TIMEOUT * 60 * 1000)) < 0)
+		if( (ret = poll(pfd,2 * number_of_descryptors,TIMEOUT * 60 * 1000)) < 0)
 			exit_with_perror("POLL");
 		else if (ret == 0)
 			exit_with_perror("TIMEOUT");
@@ -216,9 +218,8 @@ int main(int argc, char **argv)
 		{	
 			if(pfd[i].revents == 0)
         			continue;
-			if(pfd[i].revents & POLLIN)
+			if( (pfd[i].revents & POLLIN) == POLLIN)
 			{
-				printf("i: %d,nod: %d\n",i,number_of_descryptors);
 				if(i < number_of_descryptors && pfd[i].fd == listenfd[i])
 				{
 					if( (new_socket = accept(pfd[i].fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) <0)
@@ -231,27 +232,19 @@ int main(int argc, char **argv)
 					flags = fcntl(pfd[i].fd,F_GETFL);
 					fcntl(pfd[i].fd,F_SETFL,flags | O_NONBLOCK);
 				}
-				else if (i < number_of_descryptors)
-				{	
-					pass_data(pfd[i].fd,pfd[i + number_of_descryptors].fd);		
+				else					
+				{
+					if (i < number_of_descryptors)
+						pass_data(pfd[i].fd,pfd[i + number_of_descryptors].fd);		
+					else
+						pass_data(pfd[i].fd,pfd[i - number_of_descryptors].fd);		
 					
-					if(close_flag_read)
+				/*	if(close_flag_read)
 					{
 						close(pfd[i].fd);
 						pfd[i].fd = listenfd[i];
 						close_flag_read = 0;
-					}
-				}
-				else if( i >= number_of_descryptors)
-				{
-					pass_data(pfd[i].fd,pfd[i - number_of_descryptors].fd);		
-					/*if(close_flag_read)
-					{
-						close(pfd[i].fd);
-						close(pfd[i - number_of_descryptors].fd);
-						pfd[i - number_of_descryptors].fd = listenfd[i];
-						close_flag_read = 0;
-					}*/
+					} */
 				}
 			}
 		}

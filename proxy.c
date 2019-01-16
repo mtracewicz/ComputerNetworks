@@ -135,7 +135,15 @@ int setup_server(char *port) {
     if (listen(sockfd, BACKLOG) == -1)
         exit_with_perror("listen");
 
-    return sockfd;
+
+    if( (new_socket = accept(listen, (struct sockaddr *)&address, (socklen_t*)&addrlen)) <0)
+    {
+	if( errno != EWOULDBLOCK)
+  		exit_with_perror("accept"); 
+	break;
+    }
+
+    return new_socket;
 }
 
 void pass_data(int in_fd,int out_fd)
@@ -222,12 +230,6 @@ int main(int argc, char **argv)
 			{
 				if(i < number_of_descryptors && pfd[i].fd == listenfd[i])
 				{
-					if( (new_socket = accept(pfd[i].fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) <0)
-					{
-						if( errno != EWOULDBLOCK)
-  							exit_with_perror("accept"); 
-						break;
-					}
 					pfd[i].fd = new_socket;
 					flags = fcntl(pfd[i].fd,F_GETFL);
 					fcntl(pfd[i].fd,F_SETFL,flags | O_NONBLOCK);

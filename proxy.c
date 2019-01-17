@@ -16,7 +16,7 @@
 #define TIMEOUT 5
 #define BACKLOG 10
 
-/* flag indicating when to close connection */ 
+/* flag indicating when to close connection */
 int close_flag;
 typedef struct sockaddr sockaddr;
 
@@ -83,7 +83,7 @@ int connect_to_server(char *address, char *port)
 			perror("client: connect");
 			continue;
 		}
-		
+
 		/* breaks on first succesfull connect */
 		break;
 	}
@@ -105,17 +105,20 @@ int setup_server(char *port)
 	int sockfd, sockopt, rv, yes;
 	struct addrinfo hints, *servinfo, *p;
 
+	/* setting socket to be TCP */
 	memset(&hints, 0, sizeof hints);
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_flags = AI_PASSIVE;
 
+	/* returns a struct of possible addresses */
 	if ((rv = getaddrinfo(NULL, port, &hints, &servinfo)) != 0)
 	{
 		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
 		return 1;
 	}
 
+	/* iterates on returned addresses and tryies to bind */
 	for (p = servinfo; p != NULL; p = p->ai_next)
 	{
 		sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
@@ -126,6 +129,7 @@ int setup_server(char *port)
 		if (sockopt == -1)
 			exit_with_perror("setsockopt");
 
+		/* if bind fails continue */
 		if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1)
 		{
 			close(sockfd);
@@ -133,6 +137,7 @@ int setup_server(char *port)
 			continue;
 		}
 
+		/* exits loop on first succesfull bind */
 		break;
 	}
 
@@ -205,7 +210,7 @@ int main(int argc, char **argv)
 
 	/* we allocate(and by using calloc zero) memory for struct pollfd* and int* to register
 	all needed descryptors pfd gets two times the space becouse it allso stores
-	client descriptors and listenfd does not*/ 
+	client descriptors and listenfd does not*/
 	struct pollfd *pfd;
 	pfd = calloc(2 * number_of_descryptors, sizeof(struct pollfd));
 	listenfd = calloc(number_of_descryptors, sizeof(int));
@@ -236,17 +241,24 @@ int main(int argc, char **argv)
 	comunication */
 	for (;;)
 	{
+		/* if ret < 0 is then an error occured */
 		if ((ret = poll(pfd, 2 * number_of_descryptors, TIMEOUT * 60 * 1000)) < 0)
 			exit_with_perror("POLL");
+		/* if ret == 0 then timeout happened */
 		else if (ret == 0)
 			exit_with_perror("TIMEOUT");
 
+		/* we iterate on all descryptors */
 		for (i = 0; i < 2 * number_of_descryptors; i++)
 		{
+			/* if nothing happened on descryptor continue */
 			if (pfd[i].revents == 0)
 				continue;
+			/* we check if event that occured is POLLIN */
 			if ((pfd[i].revents & POLLIN) == POLLIN)
 			{
+				/* if this is descriptor returned from setup_server() then we try to accept and if succesfull,
+				 * we set  it to nonblocking */
 				if (i < number_of_descryptors && pfd[i].fd == listenfd[i])
 				{
 
@@ -260,10 +272,12 @@ int main(int argc, char **argv)
 					pfd[i].fd = new_socket;
 					flags = fcntl(pfd[i].fd, F_GETFL);
 					fcntl(pfd[i].fd, F_SETFL, flags | O_NONBLOCK);
-					printf("LOCAL_PORT_ACCEPT:%s,FD:%d\n", port, pfd[i].fd);
 				}
 				else
 				{
+					/* if it is a server descryptor we send it to corelated client and if 
+					 * pass_data() sets close_flag then we close current server descryptors and set it back
+					 * to descryptor returned by setup_server */
 					if (i < number_of_descryptors)
 					{
 						pass_data(pfd[i].fd, pfd[i + number_of_descryptors].fd);
@@ -276,6 +290,8 @@ int main(int argc, char **argv)
 					}
 					else
 					{
+						/* we pass_data() from client to server if close_flag was set then we
+						 * close the client descryptor and try to reconect */
 						pass_data(pfd[i].fd, pfd[i - number_of_descryptors].fd);
 						if (close_flag)
 						{
@@ -298,7 +314,8 @@ int main(int argc, char **argv)
 	/* closing all descryptors before exit */
 	for (i = 0; i < (2 * number_of_descryptors); i++)
 		close(pfd[i].fd);
-	/* freeing memory allocated for struct pollfd *pfd and int *listenfd */ 
+
+	/* freeing memory allocated for struct pollfd *pfd and int *listenfd */
 	free(pfd);
 	free(listenfd);
 	return 0;

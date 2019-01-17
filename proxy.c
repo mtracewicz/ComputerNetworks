@@ -16,14 +16,11 @@
 #define TIMEOUT 5
 #define BACKLOG 10
 
-int close_flag_read, close_flag_write;
+/* flag indicating when to close connection */ 
+int close_flag;
 typedef struct sockaddr sockaddr;
 
-void sigchld_handler(int s)
-{
-	while (waitpid(-1, NULL, WNOHANG) > 0);
-}
-
+/* function returning addres for correct IP version */
 void *get_in_addr(struct sockaddr *sa)
 {
 	if (sa->sa_family == AF_INET)
@@ -34,12 +31,14 @@ void *get_in_addr(struct sockaddr *sa)
 	return &(((struct sockaddr_in6 *)sa)->sin6_addr);
 }
 
+/* function which writes msg on STDERR and exits */
 void exit_with_perror(char *msg)
 {
-	printf("%s\n", msg);
+	perror(msg);
 	exit(0);
 }
 
+/* function connecting program to server on provided address and port */
 int connect_to_server(char *address, char *port)
 {
 	int sockfd;
@@ -49,7 +48,7 @@ int connect_to_server(char *address, char *port)
 	/* here addrinfo is set to parameters chosen in options or default */
 
 	/* zeroing hints structure */
-	memset(&hints, 0, sizeof( hints ));
+	memset(&hints, 0, sizeof(hints));
 
 	hints.ai_family = AF_UNSPEC;
 
@@ -77,19 +76,22 @@ int connect_to_server(char *address, char *port)
 			continue;
 		}
 
+		/* here it tryies to connect */
 		if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1)
 		{
 			close(sockfd);
 			perror("client: connect");
 			continue;
 		}
-
+		
+		/* breaks on first succesfull connect */
 		break;
 	}
 
+	/* if the program didn't connect it writes it and returns -1 */
 	if (p == NULL)
 	{
-		printf("Could not connect to: %s %s\n",address,port);
+		printf("Could not connect to: %s %s\n", address, port);
 		return -1;
 	}
 
@@ -97,6 +99,7 @@ int connect_to_server(char *address, char *port)
 	return sockfd;
 }
 
+/* function to setup server on given port */
 int setup_server(char *port)
 {
 	int sockfd, sockopt, rv, yes;
@@ -144,35 +147,38 @@ int setup_server(char *port)
 	return sockfd;
 }
 
+/* this function reads data from in_fd and writes it to out_fd */
 void pass_data(int in_fd, int out_fd)
 {
 	int n;
 	char data[1024];
-	printf("IN:%d,OUT:%d\n",in_fd,out_fd);
+
+	/* infinite loop to process data */
 	do
 	{
-		if ( (n = recv(in_fd, data, sizeof(data), 0)) == -1)
+		if ((n = recv(in_fd, data, sizeof(data), 0)) == -1)
 		{
+			/* we break if there is no more data to read or an error ocured */
 			if (errno != EAGAIN || errno != EWOULDBLOCK)
 			{
-				perror("recv");	
+				perror("recv");
 			}
-			printf("n=%d\n",n);
 			break;
 		}
-		else if( n == 0)
+		else if (n == 0)
 		{
-			printf("n=%d\n",n);
-			close_flag_read = 1;
+			/* if the connection got ended we set the close_flag and break */
+			close_flag = 1;
 			break;
 		}
 
+		/* we write as long as there is smothing to write */
 		if (write(out_fd, data, n) == -1)
 		{
+			/* if an error ocures we break */
 			if (errno != EAGAIN || errno != EWOULDBLOCK)
 			{
 				perror("write");
-				close_flag_write = 1;
 			}
 			break;
 		}
@@ -188,18 +194,23 @@ int main(int argc, char **argv)
 	struct sockaddr_in address;
 	int addrlen = sizeof(address);
 
+	/* we're checking if the number of arguments is right and if it is we
+	set number_of_descryptors to the number of complete set of arguments */
 	if ((argc - 1) % 3)
 		exit_with_perror("Wrong number of arguments");
 	else
 		number_of_descryptors = (((argc - 1) / 3));
 
-	close_flag_read = 0;
-	close_flag_write = 0;
+	close_flag = 0;
 
+	/* we allocate(and by using calloc zero) memory for struct pollfd* and int* to register
+	all needed descryptors pfd gets two times the space becouse it allso stores
+	client descriptors and listenfd does not*/ 
 	struct pollfd *pfd;
 	pfd = calloc(2 * number_of_descryptors, sizeof(struct pollfd));
 	listenfd = calloc(number_of_descryptors, sizeof(int));
 
+	/* here we register all of provided server and clients */
 	for (i = 0; i < number_of_descryptors; i++)
 	{
 		/*reading local port, host and host port from arguments*/
@@ -212,15 +223,17 @@ int main(int argc, char **argv)
 			exit_with_perror("SOCKET");
 		pfd[i].events = POLLIN;
 		listenfd[i] = pfd[i].fd;
-		printf("LOCAL_PORT_LISTEN:%s,FD:%d\n",port,pfd[i].fd);
-		/* connecting to host on host_port and putting it in struct pollfd, then wetting it to be nonblocking */
+
+		/* connecting to host on host_port and putting it in struct pollfd,
+		then setting it to be nonblocking */
 		pfd[i + number_of_descryptors].fd = connect_to_server(host, host_port);
 		pfd[i + number_of_descryptors].events = POLLIN;
 		flags = fcntl(pfd[i + number_of_descryptors].fd, F_GETFL);
 		fcntl(pfd[i + number_of_descryptors].fd, F_SETFL, flags | O_NONBLOCK);
-		printf("HOST:%s,PORT:%s,FD:%d\n",host,host_port,pfd[i + number_of_descryptors].fd);
 	}
 
+	/* this is the main loop of our program in which we use poll() to perrform our
+	comunication */
 	for (;;)
 	{
 		if ((ret = poll(pfd, 2 * number_of_descryptors, TIMEOUT * 60 * 1000)) < 0)
@@ -247,48 +260,45 @@ int main(int argc, char **argv)
 					pfd[i].fd = new_socket;
 					flags = fcntl(pfd[i].fd, F_GETFL);
 					fcntl(pfd[i].fd, F_SETFL, flags | O_NONBLOCK);
-					printf("LOCAL_PORT_ACCEPT:%s,FD:%d\n",port,pfd[i].fd);
+					printf("LOCAL_PORT_ACCEPT:%s,FD:%d\n", port, pfd[i].fd);
 				}
 				else
 				{
 					if (i < number_of_descryptors)
 					{
 						pass_data(pfd[i].fd, pfd[i + number_of_descryptors].fd);
-						if(close_flag_read)
+						if (close_flag)
 						{
 							close(pfd[i].fd);
 							pfd[i].fd = listenfd[i];
-							close_flag_read = 0;
+							close_flag = 0;
 						}
 					}
 					else
 					{
 						pass_data(pfd[i].fd, pfd[i - number_of_descryptors].fd);
-						if(close_flag_read)
+						if (close_flag)
 						{
-							host = argv[((i-number_of_descryptors) * 3 + 2)];
-							host_port = argv[((i-number_of_descryptors) * 3 + 3)];
-							if( (pfd[i].fd = connect_to_server(host, host_port)) != -1)
+							host = argv[((i - number_of_descryptors) * 3 + 2)];
+							host_port = argv[((i - number_of_descryptors) * 3 + 3)];
+							if ((pfd[i].fd = connect_to_server(host, host_port)) != -1)
 							{
 								pfd[i].events = POLLIN;
 								flags = fcntl(pfd[i].fd, F_GETFL);
 								fcntl(pfd[i].fd, F_SETFL, flags | O_NONBLOCK);
 							}
-							close_flag_read = 0;
+							close_flag = 0;
 						}
 					}
-	
 				}
 			}
 		}
 	}
 
+	/* closing all descryptors before exit */
 	for (i = 0; i < (2 * number_of_descryptors); i++)
-	{
-		if (pfd[i].fd >= 0)
-			close(pfd[i].fd);
-	}
-
+		close(pfd[i].fd);
+	/* freeing memory allocated for struct pollfd *pfd and int *listenfd */ 
 	free(pfd);
 	free(listenfd);
 	return 0;

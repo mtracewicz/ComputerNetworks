@@ -228,6 +228,14 @@ int main(int argc, char **argv)
 			exit_with_perror("SOCKET");
 		pfd[i].events = POLLIN;
 		listenfd[i] = pfd[i].fd;
+		if ((new_socket = accept(pfd[i].fd, (struct sockaddr *)&address, (socklen_t *)&addrlen)) < 0)
+		{
+			if (errno != EWOULDBLOCK)
+					exit_with_perror("accept");
+		}
+		pfd[i].fd = new_socket;
+		flags = fcntl(pfd[i].fd, F_GETFL);
+		fcntl(pfd[i].fd, F_SETFL, flags | O_NONBLOCK);
 
 		/* connecting to host on host_port and putting it in struct pollfd,
 		then setting it to be nonblocking */

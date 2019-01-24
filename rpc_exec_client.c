@@ -5,17 +5,16 @@
  */
 
 #include "rpc_exec.h"
-
+#include <string.h>
 
 void
-rpc_exec_1(char *host,char *progname,char *argu)
+rpc_exec_1(char *host,char *prog,char *args)
 {
 	CLIENT *clnt;
 	int  *result_1;
 	in_args  rpc_exec_1_arg;
-
-	strcpy(rpc_exec_1_arg.p_name,progname);
-	strcpy(rpc_exec_1_arg.args,argu);
+	strcpy(rpc_exec_1_arg.p_name,prog);
+	strcpy(rpc_exec_1_arg.args,args);
 
 #ifndef	DEBUG
 	clnt = clnt_create (host, RPC_EXEC, EXEC, "udp");
@@ -38,23 +37,36 @@ rpc_exec_1(char *host,char *progname,char *argu)
 int
 main (int argc, char *argv[])
 {
-	char *host;
-	char *progname;
-	char *argu;	
 	int i;
+	char *host, prog[50], args[250];
 
 	if (argc < 2) {
-		printf ("usage: %s server_host\n", argv[0]);
+		printf ("usage: %s server_host program arguments\n", argv[0]);
 		exit (1);
 	}
-
+	
 	host = argv[1];
-	progname = argv[2];
-	for(i = 3;i <argc;i++)
-	{	
-		strcat(argu,argv[i]);	
-		strcat(argu,"~");
+	prog = argv[2];
+	
+	if(argc > 3)
+	{
+		strcpy(args,argv[3]);
+		strcat(args,"~");
+		
+		if(argc >4)
+		{
+			for(i = 4; i< argc; i++)
+			{
+				strcat(args,argv[3]);
+				strcat(args,"~");
+			}
+		}
 	}
-	rpc_exec_1 (host,progname,argu);
+	else
+	{
+		strcpy(args,"\0");
+	}
+
+	rpc_exec_1 (host,prog,args);
 	exit (0);
 }

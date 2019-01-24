@@ -5,40 +5,15 @@
  */
 
 #include "rpc_exec.h"
-#include <unistd.h>
-#include <stdio.h>
-#include<sys/wait.h>
 
 int *
 rpc_exec_1_svc(in_args *argp, struct svc_req *rqstp)
 {
 	static int  result;
-	int pid,i,j = 0;
-	char **arguments;
-	char *tmp,prev;
-	for(i = 0 ; i < 250;i++)
-	{
-		if(argp -> args[i] != '~')
-		{	if(prev == '~')
-				strcpy(tmp,argp -> args[j]);
-			else
-				strcat(tmp,argp -> args[j]);
-		}
-		else
-		{
-			strcpy(arguments[i],tmp);
-			prev = '~'
-			strcpy(tmp,'\0');
-			j++;		
-		}	
-	}	
-	if((pid = fork()) < 0 )
-		exit(0);
-	else if(pid == 0 )
-		execvp(argp->p_name,arguments);
-	else
-		wait();
-	
+
+	/*
+	 * insert server code here
+	 */
 
 	return &result;
 }

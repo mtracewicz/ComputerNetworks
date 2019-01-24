@@ -7,14 +7,17 @@
 #include "rpc_exec.h"
 #include <string.h>
 
-void
-rpc_exec_1(char *host,char *prog,char *args)
+char prog[50],argu[250];
+int noa;
+
+void rpc_exec_1(char *host)
 {
 	CLIENT *clnt;
 	int  *result_1;
-	in_args  rpc_exec_1_arg;
-	strcpy(rpc_exec_1_arg.p_name,prog);
-	strcpy(rpc_exec_1_arg.args,args);
+	in_args  my_exec_1_arg;
+	strcpy(my_exec_1_arg.p_name,prog);
+	strcpy(my_exec_1_arg.args,argu);
+	my_exec_1_arg.number_of_arguments = noa;
 
 #ifndef	DEBUG
 	clnt = clnt_create (host, RPC_EXEC, EXEC, "udp");
@@ -24,49 +27,52 @@ rpc_exec_1(char *host,char *prog,char *args)
 	}
 #endif	/* DEBUG */
 
-	result_1 = rpc_exec_1(&rpc_exec_1_arg, clnt);
+	result_1 = my_exec_1(&my_exec_1_arg, clnt);
 	if (result_1 == (int *) NULL) {
 		clnt_perror (clnt, "call failed");
 	}
+
+	printf("Proces zwrocil: %d\n", result_1);
+
 #ifndef	DEBUG
 	clnt_destroy (clnt);
 #endif	 /* DEBUG */
 }
 
 
-int
-main (int argc, char *argv[])
+int main (int argc, char *argv[])
 {
+	char *host;
 	int i;
-	char *host, prog[50], args[250];
 
 	if (argc < 2) {
-		printf ("usage: %s server_host program arguments\n", argv[0]);
+		printf ("usage: %s server_host\n", argv[0]);
 		exit (1);
 	}
 	
 	host = argv[1];
-	prog = argv[2];
 	
+	strcpy(prog,argv[2]);
+	noa = ( argc - 3);	
 	if(argc > 3)
 	{
-		strcpy(args,argv[3]);
-		strcat(args,"~");
+		strcpy(argu,argv[3]);
+		strcat(argu,"~");
 		
 		if(argc >4)
 		{
 			for(i = 4; i< argc; i++)
 			{
-				strcat(args,argv[3]);
-				strcat(args,"~");
+				strcat(argu,argv[i]);
+				strcat(argu,"~");
 			}
 		}
 	}
 	else
 	{
-		strcpy(args,"\0");
+		strcpy(argu,"\0");
 	}
 
-	rpc_exec_1 (host,prog,args);
+	rpc_exec_1 (host);
 	exit (0);
 }

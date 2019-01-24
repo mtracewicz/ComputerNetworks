@@ -20,7 +20,7 @@ static void
 rpc_exec_1(struct svc_req *rqstp, register SVCXPRT *transp)
 {
 	union {
-		in_args rpc_exec_1_arg;
+		in_args my_exec_1_arg;
 	} argument;
 	char *result;
 	xdrproc_t _xdr_argument, _xdr_result;
@@ -31,10 +31,10 @@ rpc_exec_1(struct svc_req *rqstp, register SVCXPRT *transp)
 		(void) svc_sendreply (transp, (xdrproc_t) xdr_void, (char *)NULL);
 		return;
 
-	case RPC_EXEC:
+	case MY_EXEC:
 		_xdr_argument = (xdrproc_t) xdr_in_args;
 		_xdr_result = (xdrproc_t) xdr_int;
-		local = (char *(*)(char *, struct svc_req *)) rpc_exec_1_svc;
+		local = (char *(*)(char *, struct svc_req *)) my_exec_1_svc;
 		break;
 
 	default:

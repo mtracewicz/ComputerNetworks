@@ -17,22 +17,23 @@ extern "C" {
 struct in_args {
 	char p_name[50];
 	char args[250];
+	int number_of_arguments;
 };
 typedef struct in_args in_args;
 
-#define RPC_EXEC 0x31240088
+#define RPC_EXEC 0x31240055
 #define EXEC 1
 
 #if defined(__STDC__) || defined(__cplusplus)
-#define RPC_EXEC 1
-extern  int * rpc_exec_1(in_args *, CLIENT *);
-extern  int * rpc_exec_1_svc(in_args *, struct svc_req *);
+#define MY_EXEC 1
+extern  int * my_exec_1(in_args *, CLIENT *);
+extern  int * my_exec_1_svc(in_args *, struct svc_req *);
 extern int rpc_exec_1_freeresult (SVCXPRT *, xdrproc_t, caddr_t);
 
 #else /* K&R C */
-#define RPC_EXEC 1
-extern  int * rpc_exec_1();
-extern  int * rpc_exec_1_svc();
+#define MY_EXEC 1
+extern  int * my_exec_1();
+extern  int * my_exec_1_svc();
 extern int rpc_exec_1_freeresult ();
 #endif /* K&R C */
 

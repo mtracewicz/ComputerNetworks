@@ -17,5 +17,7 @@ xdr_in_args (XDR *xdrs, in_args *objp)
 	 if (!xdr_vector (xdrs, (char *)objp->args, 250,
 		sizeof (char), (xdrproc_t) xdr_char))
 		 return FALSE;
+	 if (!xdr_int (xdrs, &objp->number_of_arguments))
+		 return FALSE;
 	return TRUE;
 }

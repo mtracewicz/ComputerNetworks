@@ -5,15 +5,86 @@
  */
 
 #include "rpc_exec.h"
+#include <errno.h>
+#include <sys/wait.h>
+#include <stdio.h>
+#include <unistd.h>
 
-int *
-rpc_exec_1_svc(in_args *argp, struct svc_req *rqstp)
+int *my_exec_1_svc(in_args *argp, struct svc_req *rqstp)
 {
 	static int  result;
+	int i,j = 1,pid,ch_status,exec_check;
+	char **argu,prev[1] = "\0",now[1];
+	
+	printf("noa %d\n",argp -> number_of_arguments);	
+	if(argp->number_of_arguments > 0)
+	{
+		argu = calloc(argp -> number_of_arguments + 2,sizeof(char*));
+		for(i = 0; i < argp -> number_of_arguments + 2; i++)
+		{
+			argu[i] = calloc(250,sizeof(char));
+		}
 
-	/*
-	 * insert server code here
-	 */
+		strcpy(argu[0],argp -> p_name);
+
+		for(i = 0 ; i < strlen(argp -> args);i++)
+		{
+			now[0] = argp -> args[i];
+			if(strncmp(now,"~",1) == 0)
+			{
+				strcpy(prev,now);
+				continue;
+			}
+			else
+			{	
+				if(i == 0)
+				{
+					strcpy(argu[j],now);
+				}
+				else if(strncmp(prev,"\0",1) == 0)
+				{
+					strcpy(prev,now);
+					continue;
+				}
+				else if(strncmp(prev,"~",1) == 0)
+				{	
+					j++;
+					strcpy(argu[j],now);
+				}
+				else
+					strcat(argu[j],now);
+
+				strcpy(prev,now);
+			}
+		}
+	
+		argu[argp -> number_of_arguments + 1] = NULL;
+	}
+	else
+	{
+		argu = calloc(1,sizeof(char*));
+		argu[0] = calloc(250,sizeof(char));
+		strcpy(argu[0],argp -> p_name);
+	}
+
+	if( (pid = fork() ) < 0)
+		perror("fork");
+	else if( pid == 0)
+	{
+		if( (exec_check = execvp(argp -> p_name,argu) ) < 0)
+			perror("exec");
+	}
+	else
+	{
+		ch_status = wait(NULL);
+	}
+
+	for(i = 0; i < argp -> number_of_arguments; i++)
+	{
+		free(argu[i]);
+	}
+
+	free(argu);
 
 	return &result;
 }

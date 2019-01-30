@@ -7,8 +7,8 @@
 #include "rpc_exec.h"
 #include <string.h>
 
-char prog[50],argu[250];
-int noa;
+char prog[50],argu[250],buff[1024];
+int noa,flaga;
 
 void rpc_exec_1(char *host)
 {
@@ -18,6 +18,8 @@ void rpc_exec_1(char *host)
 	strcpy(my_exec_1_arg.p_name,prog);
 	strcpy(my_exec_1_arg.args,argu);
 	my_exec_1_arg.number_of_arguments = noa;
+	my_exec_1_arg.flag = flaga;
+	strcpy(my_exec_1_arg.buf,buff);
 
 #ifndef	DEBUG
 	clnt = clnt_create (host, RPC_EXEC, EXEC, "udp");
@@ -32,7 +34,7 @@ void rpc_exec_1(char *host)
 		clnt_perror (clnt, "call failed");
 	}
 
-	printf("Proces zwrocil: %d\n", result_1);
+	printf("Proces zwrocil: %d\n", *result_1);
 
 #ifndef	DEBUG
 	clnt_destroy (clnt);
@@ -43,25 +45,39 @@ void rpc_exec_1(char *host)
 int main (int argc, char *argv[])
 {
 	char *host;
-	int i;
+	int i,opt;
 
 	if (argc < 2) {
-		printf ("usage: %s server_host\n", argv[0]);
+		printf ("usage: %s server_host [-i buff] program arguments\n", argv[0]);
 		exit (1);
 	}
 	
 	host = argv[1];
 	
-	strcpy(prog,argv[2]);
-	noa = ( argc - 3);	
-	if(argc > 3)
+	if(strcmp(argv[2],"-i") == 0 )
 	{
-		strcpy(argu,argv[3]);
+		flaga = 1;
+		strcpy(buff,argv[3]);
+		strcpy(prog,argv[4]);
+		noa = ( argc - 5);
+		opt = 5;
+	}
+	else
+	{	
+		flaga = 0;
+		strcpy(prog,argv[2]);
+		noa = ( argc - 3);	
+		opt = 3;
+	}
+
+	if(noa)
+	{
+		strcpy(argu,argv[opt]);
 		strcat(argu,"~");
 		
-		if(argc >4)
+		if(argc >(opt+1))
 		{
-			for(i = 4; i< argc; i++)
+			for(i = (opt + 1); i< argc; i++)
 			{
 				strcat(argu,argv[i]);
 				strcat(argu,"~");

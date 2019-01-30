@@ -18,6 +18,8 @@ struct in_args {
 	char p_name[50];
 	char args[250];
 	int number_of_arguments;
+	int flag;
+	char buf[1024];
 };
 typedef struct in_args in_args;
 

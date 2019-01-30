@@ -13,10 +13,8 @@
 int *my_exec_1_svc(in_args *argp, struct svc_req *rqstp)
 {
 	static int  result;
-	int i,j = 1,pid,ch_status,exec_check;
-	char **argu,prev[1] = "\0",now[1];
-	
-	printf("noa %d\n",argp -> number_of_arguments);	
+	int ch_pid, fd[2], i, pid, ch_status, j = 1;
+	char **argu, now[2], prev[2] = "\0";
 	if(argp->number_of_arguments > 0)
 	{
 		argu = calloc(argp -> number_of_arguments + 2,sizeof(char*));
@@ -26,10 +24,10 @@ int *my_exec_1_svc(in_args *argp, struct svc_req *rqstp)
 		}
 
 		strcpy(argu[0],argp -> p_name);
-
 		for(i = 0 ; i < strlen(argp -> args);i++)
 		{
 			now[0] = argp -> args[i];
+			now[1] = '\0';
 			if(strncmp(now,"~",1) == 0)
 			{
 				strcpy(prev,now);
@@ -40,19 +38,16 @@ int *my_exec_1_svc(in_args *argp, struct svc_req *rqstp)
 				if(i == 0)
 				{
 					strcpy(argu[j],now);
-				}
-				else if(strncmp(prev,"\0",1) == 0)
-				{
-					strcpy(prev,now);
-					continue;
-				}
+				}	
 				else if(strncmp(prev,"~",1) == 0)
-				{	
+				{
 					j++;
 					strcpy(argu[j],now);
 				}
 				else
+				{
 					strcat(argu[j],now);
+				}
 
 				strcpy(prev,now);
 			}
@@ -67,16 +62,45 @@ int *my_exec_1_svc(in_args *argp, struct svc_req *rqstp)
 		strcpy(argu[0],argp -> p_name);
 	}
 
+	for(i = 0 ; i < argp -> number_of_arguments + 1;i++)
+	{
+		printf("%s\n",argu[i]);
+	}
+
+	if(argp -> flag == 1)
+	{
+		if (pipe(fd) == -1)
+			perror("pipe");
+
+	}
 	if( (pid = fork() ) < 0)
 		perror("fork");
 	else if( pid == 0)
 	{
-		if( (exec_check = execvp(argp -> p_name,argu) ) < 0)
-			perror("exec");
+		if(argp -> flag == 1)
+		{
+			if (dup2(fd[0], STDIN_FILENO) == -1) 
+		            perror("Error changing STDIN");
+		       	else if ((close(fd[0]) == -1) || (close(fd[1]) == -1))
+		            perror("Error closing pipe");
+		}
+
+		execvp(argp -> p_name,argu); 
+		perror("exec");
 	}
 	else
 	{
-		ch_status = wait(NULL);
+		if(argp -> flag == 1)
+		{
+			write(fd[1],argp -> buf,strlen(argp -> buf));
+		}
+
+		ch_pid = wait(&ch_status);
+		if(argp -> flag)
+		{	
+			if ((close(fd[0]) == -1) || (close(fd[1]) == -1))
+				perror("Error closing pipe");
+		}
 	}
 
 	for(i = 0; i < argp -> number_of_arguments; i++)
@@ -85,6 +109,6 @@ int *my_exec_1_svc(in_args *argp, struct svc_req *rqstp)
 	}
 
 	free(argu);
-
+	result = ch_status;
 	return &result;
 }

@@ -1,4 +1,4 @@
-# ComputerNetworks
+# Computer Networks
 My projects done during Computer Networks curriculm
 ## Chat
 Console chat app designed to be used on single machine using SysV Shared Memory Queues and Semaphores
